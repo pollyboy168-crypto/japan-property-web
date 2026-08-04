@@ -1,6 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// ----------------------------------------------------------------
+// 💡 初始化 Supabase 用戶端 (請確認 URL 與 Key)
+// ----------------------------------------------------------------
+const SUPABASE_URL = 'https://nfegislkpuzqylwcfnoc.supabase.co';
+// ⚠️ 請填入您在 Supabase -> Project Settings -> API 頁面複製的 anon public key
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE'; 
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export default function Home() {
   // 匯率與貨幣設定 (以 1 JPY = 0.21 TWD 估算)
@@ -15,50 +24,54 @@ export default function Home() {
     jpCompanyEn: 'Kazuhi Co., Ltd.',
     address: '大阪府大阪市中央区日本橋二丁目8-15',
     licenseNo: '法人番号 1200-01-288148',
-    lineUrl: 'https://line.me/ti/p/~your_line_id', // ⚠️ 請替換為您的 LINE 連結
-    email: 'contact@kazuhi-property.com',         // ⚠️ 請替換為您的 Email
+    lineUrl: 'https://line.me/ti/p/@267fmlaq', // 💡 官方 LINE 諮詢連結
+    email: 'contact@kazuhi-property.com',
     flagshipUrl: 'https://www.shinsai-wings-osakastay.com/' // 旗艦民宿網址
   };
 
   // ----------------------------------------------------------------
-  // 🏠 精選與自營房源資料庫
+  // 🏠 動態物件資料庫 (改從 Supabase 自動讀取 200+ 筆)
   // ----------------------------------------------------------------
-  const properties = [
-    {
-      id: 'prop-shinsai-wings',
-      title: '【和日直營/旗艦出售】心齋橋圈 5層獨棟特區民泊 (Shinsai Wings)',
-      location: '大阪市中央區',
-      structure: '5層獨棟 S造 (鋼骨構造)',
-      priceJPY: 120000000, // 1 億 2 千萬日圓
-      description: '1樓配備專業消防與合規格柵改建，2-5樓精裝多人旅宿格局。永久產權獨棟大樓，擁 365 天合法特區民泊執照，帶現成滿房營運團隊。',
-      tags: ['直營旗艦標的', '永久產權', '365天特區民泊', '賭場圈捷運線'],
-      imageUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80',
-      isFlagship: true,
-      externalUrl: companyInfo.flagshipUrl
-    },
-    {
-      id: 'prop-2',
-      title: '難波站徒步 6 分鐘 高人氣觀光獨棟套房',
-      location: '大阪市浪速區',
-      structure: 'RC 鋼筋混凝土構造',
-      priceJPY: 38500000,
-      description: '價格僅台灣小兩房的三分之一！地段極佳，賭場直達地鐵線周邊，觀光客住房率極高。現成團隊代管，買下即可享受穩定外幣被動收入。',
-      tags: ['難波商圈', '親民總價', 'RC永久產權'],
-      imageUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-      isFlagship: false
-    },
-    {
-      id: 'prop-3',
-      title: '此花區獨棟民宿 夢洲賭場與萬博第一線受惠區',
-      location: '大阪市此花區',
-      structure: '獨棟鋼構改建',
-      priceJPY: 68000000,
-      description: '直達賭場預定地夢洲！鄰近環球影城，大坪數家庭房型，博弈綜合度假村（IR）開幕後預計租金與地價呈爆發性成長。',
-      tags: ['賭場概念第一線', '特區民泊', '大坪數家庭房'],
-      imageUrl: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
-      isFlagship: false
+  const [properties, setProperties] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchOsakaProperties() {
+      try {
+        const { data, error } = await supabase
+          .from('properties')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Supabase 讀取錯誤:', error);
+        } else if (data && data.length > 0) {
+          // 將 Supabase 資料庫欄位對接至 React 卡片格式
+          const mappedData = data.map((item) => ({
+            id: item.id,
+            title: item.title_zh || '大阪精選投資物業',
+            location: item.location || '大阪府大阪市',
+            structure: item.type || '收益型不動產/民泊',
+            priceJPY: item.price_jpy || 50000000,
+            description: item.description_zh || '大阪府大阪市の厳選収益物件。',
+            tags: [item.type || '收益不動產', `預估 ROI ${item.roi}%`],
+            imageUrl: item.image_url || (item.images && item.images[0]) || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=800&q=80',
+            images: item.images || [],
+            lineLink: item.line_link || companyInfo.lineUrl,
+            originalUrl: item.original_url || 'https://www.kenbiya.com/',
+            isFlagship: item.id === 'prop-shinsai-wings'
+          }));
+          setProperties(mappedData);
+        }
+      } catch (err) {
+        console.error('無法連線至 Supabase:', err);
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
+
+    fetchOsakaProperties();
+  }, []);
 
   // 試算器 State
   const [propertyPriceJPY, setPropertyPriceJPY] = useState(12000); // 預設 1.2 億
@@ -113,7 +126,7 @@ export default function Home() {
             <a href="#why-osaka" className="hover:text-blue-600 transition">大阪核心吸引力</a>
             <a href="#calculator" className="hover:text-blue-600 transition">投資試算</a>
             <a href="#flagship" className="hover:text-blue-600 transition">旗艦民宿 (Shinsai Wings)</a>
-            <a href="#properties" className="hover:text-blue-600 transition">精選物件</a>
+            <a href="#properties" className="hover:text-blue-600 transition">精選物件 ({properties.length})</a>
           </nav>
           
           <div className="flex items-center gap-3">
@@ -159,7 +172,6 @@ export default function Home() {
             台北買套房的預算，在大阪能買下市中心整棟永久產權大樓！由【株式会社和日】在地親自營運，為您實現高租金回報與地價爆發雙重紅利。
           </p>
 
-          {/* 快捷切換按鈕 */}
           <div className="flex flex-wrap justify-center gap-3 pt-4">
             <a href="#why-osaka" className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold px-4 py-2 rounded-lg transition">🎰 大阪四大投資吸引力</a>
             <a href="#calculator" className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition">📊 收益試算</a>
@@ -171,7 +183,7 @@ export default function Home() {
       {/* 核心內容區 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
         
-        {/* 🔥🔥 核心亮點專區：為什麼投資大阪房產？四大致命吸引力 (id="why-osaka") */}
+        {/* 🔥 大阪四大投資吸引力 (id="why-osaka") */}
         <section id="why-osaka" className="scroll-mt-20 bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-lg space-y-8">
           <div className="text-center max-w-3xl mx-auto space-y-2">
             <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Core Investment Value</span>
@@ -180,7 +192,6 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* 1. 夢洲賭場紅利 */}
             <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-6 sm:p-8 rounded-2xl space-y-3 relative overflow-hidden shadow-md">
               <div className="text-amber-400 text-3xl font-black">01</div>
               <h3 className="text-xl font-bold flex items-center gap-2">
@@ -191,7 +202,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* 2. 土地永久產權 */}
             <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3 shadow-sm hover:shadow-md transition">
               <div className="text-blue-600 text-3xl font-black">02</div>
               <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -202,7 +212,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* 3. 價格比台灣親民 */}
             <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3 shadow-sm hover:shadow-md transition">
               <div className="text-emerald-600 text-3xl font-black">03</div>
               <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -213,7 +222,6 @@ export default function Home() {
               </p>
             </div>
 
-            {/* 4. 特區民泊 365 天營運 */}
             <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3 shadow-sm hover:shadow-md transition">
               <div className="text-indigo-600 text-3xl font-black">04</div>
               <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -346,56 +354,87 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 3. 精選房源展示 (id="properties") */}
+        {/* 3. 精選房源展示區 (改為動態渲染 Supabase 200+ 筆物件) */}
         <section id="properties" className="scroll-mt-20 space-y-6">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">精選與直營投資物件</h2>
-            <p className="text-slate-500 text-sm mt-1">經株式会社和日團隊勘查，具備 1 樓格柵改建與 365 天民泊執照之永久產權物件</p>
+          <div className="flex justify-between items-end">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">精選與全網即時投資物件</h2>
+              <p className="text-slate-500 text-sm mt-1">即時同步日本地產數據，具備 365 天特區民泊與高收益回報之永久產權標的</p>
+            </div>
+            <div className="text-xs text-slate-500 font-semibold">
+              共 <span className="text-blue-600 font-bold text-base">{properties.length}</span> 筆熱門物件
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {properties.map((item) => (
-              <div key={item.id} className={`bg-white rounded-xl shadow-sm border ${item.isFlagship ? 'border-amber-400 ring-2 ring-amber-400/20' : 'border-slate-200'} overflow-hidden hover:shadow-md transition flex flex-col justify-between`}>
-                <div className="relative h-48 bg-slate-100">
-                  <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
-                  <div className="absolute top-3 left-3 flex flex-wrap gap-1">
-                    {item.tags.map((tag, idx) => (
-                      <span key={idx} className={`text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm ${item.isFlagship && idx === 0 ? 'bg-amber-500 text-white' : 'bg-slate-900/80 text-white'}`}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <span className="text-xs text-blue-600 font-semibold">{item.location} ‧ {item.structure}</span>
-                    <h3 className="font-bold text-base text-slate-900 leading-snug">{item.title}</h3>
-                    <p className="text-xs text-slate-500 line-clamp-3">{item.description}</p>
-                  </div>
-
-                  <div className="space-y-2 border-t border-slate-100 pt-3">
-                    <div className="flex justify-between items-end">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">預售價格 (含代管)</span>
-                        <span className="font-black text-blue-600 text-lg">
-                          {formatPropertyPrice(item.priceJPY)}
+          {loading ? (
+            <div className="text-center py-16 text-slate-400">
+              <div className="animate-spin text-3xl mb-2">🌀</div>
+              正在從 Supabase 載入最新大阪物業資料庫...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {properties.map((item) => (
+                <div key={item.id} className={`bg-white rounded-xl shadow-sm border ${item.isFlagship ? 'border-amber-400 ring-2 ring-amber-400/20' : 'border-slate-200'} overflow-hidden hover:shadow-md transition flex flex-col justify-between`}>
+                  
+                  {/* 物件圖片 */}
+                  <div className="relative h-48 bg-slate-100">
+                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+                      {item.tags.map((tag, idx) => (
+                        <span key={idx} className={`text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm ${item.isFlagship && idx === 0 ? 'bg-amber-500 text-white' : 'bg-slate-900/80 text-white'}`}>
+                          {tag}
                         </span>
-                      </div>
-                      <a
-                        href={companyInfo.lineUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded transition"
-                      >
-                        預約看房/索取資料
-                      </a>
+                      ))}
                     </div>
                   </div>
+
+                  {/* 物件卡片內文 */}
+                  <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <span className="text-xs text-blue-600 font-semibold">📍 {item.location} ‧ {item.structure}</span>
+                      <h3 className="font-bold text-base text-slate-900 leading-snug line-clamp-1">{item.title}</h3>
+                      
+                      {/* 日本官網原汁原味摘要描述 */}
+                      <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">{item.description}</p>
+                    </div>
+
+                    <div className="space-y-3 border-t border-slate-100 pt-3">
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">預售價格 (含代管)</span>
+                          <span className="font-black text-blue-600 text-lg">
+                            {formatPropertyPrice(item.priceJPY)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        {item.originalUrl && (
+                          <a
+                            href={item.originalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 text-center bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2 rounded transition"
+                          >
+                            🔗 原始官網
+                          </a>
+                        )}
+                        <a
+                          href={item.lineLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 text-center bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-2 rounded transition shadow-sm flex items-center justify-center gap-1"
+                        >
+                          <span>💬</span> LINE 諮詢
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* 4. 日本官方公司背景信任區 */}
