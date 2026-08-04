@@ -5,3 +5,4 @@ out
 build
 .DS_Store
 *.logpackage-lock.json 
+package-lock.json
