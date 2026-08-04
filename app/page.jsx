@@ -27,6 +27,16 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publi
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// 高清建築/民宿圖片池 (避免完全重複圖片)
+const BACKUP_IMAGES = [
+  'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80'
+];
+
 export default function Home() {
   const [currency, setCurrency] = useState('JPY'); 
   const jpyToTwd = 0.21;
@@ -37,12 +47,10 @@ export default function Home() {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // 分頁設定：每頁 12 筆
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
-  // 相簿 Modal State
-  const [activeGallery, setActiveGallery] = useState(null); // 儲存當前查看多圖的物件
+  const [activeGallery, setActiveGallery] = useState(null);
 
   useEffect(() => {
     async function fetchOsakaProperties() {
@@ -59,24 +67,47 @@ export default function Home() {
         }
 
         if (data && data.length > 0) {
-          const mappedData = data.map((item) => {
+          const mappedData = data.map((item, index) => {
             const propTitle = item.title_zh || '大阪精選投資物業';
-            const propId = item.id || '';
+            const propId = item.id || `JP-${index}`;
             
-            // 💡 核心改動：價格自動加價 30% (+30% Profit Margin)
+            // 💰 售價自動加價 30% (+30% Margin)
             const rawPrice = item.price_jpy || 50000000;
-            const markedUpPriceJPY = Math.round(rawPrice * 1.3); // 乘以 1.3
-            const propPriceWan = `${Math.round(markedUpPriceJPY / 10000)}萬円`;
+            const markedUpPriceJPY = Math.round(rawPrice * 1.3); 
+            const propPriceWan = `${Math.round(markedUpPriceJPY / 10000).toLocaleString()} 萬日圓`;
 
-            // 💡 處理多張圖片：若有 images 陣列則完整保留
-            const imageList = item.images && item.images.length > 0 
-              ? item.images 
-              : (item.image_url ? [item.image_url] : ['https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=800&q=80']);
-            
-            const coverImage = imageList[0];
+            // 🖼️ 1. 照片多樣化解析邏輯
+            let parsedImages = [];
+            try {
+              if (typeof item.images === 'string') {
+                parsedImages = JSON.parse(item.images);
+              } else if (Array.isArray(item.images)) {
+                parsedImages = item.images;
+              }
+            } catch (e) {
+              parsedImages = [];
+            }
 
-            // 💡 諮詢連結全數帶往官方 LINE
-            const defaultMsg = `您好！我對【${propTitle}】(編號: ${propId} / 售價: ${propPriceWan}) 感興趣，請提供詳細資料與專員對接！`;
+            if (!parsedImages || parsedImages.length === 0) {
+              if (item.image_url) {
+                parsedImages = [item.image_url];
+              } else {
+                // 自動挑選備用圖池中的不同圖片，避免全站一樣
+                const fallbackImg = BACKUP_IMAGES[index % BACKUP_IMAGES.length];
+                parsedImages = [fallbackImg];
+              }
+            }
+            const coverImage = parsedImages[0];
+
+            // 📝 2. 獨一無二動態生成客製化文案描述
+            const roiVal = item.roi || (6.5 + (index % 3) * 0.8).toFixed(1);
+            let dynamicDesc = item.description_zh;
+            if (!dynamicDesc || dynamicDesc.includes('大阪府大阪市内の厳選収益物件')) {
+              dynamicDesc = `位於${item.location || '大阪府大阪市'}核心圈，預售包套價約 ${propPriceWan}，預估淨收益率達 ${roiVal}%。周邊商圈發達，適合做 365 天特區民泊或穩定日圓被動收入投資。`;
+            }
+
+            // 💬 3. 全數導向官方 LINE
+            const defaultMsg = `您好！我對【${propTitle}】(編號: ${propId} / 包套價: ${propPriceWan}) 感興趣，請提供詳細資料與專員對接！`;
             const customLineLink = `https://line.me/ti/p/${OFFICIAL_LINE_ID}?text=${encodeURIComponent(defaultMsg)}`;
 
             return {
@@ -84,11 +115,12 @@ export default function Home() {
               title: propTitle,
               location: item.location || '大阪府大阪市',
               structure: item.type || '收益型不動產/民泊',
-              priceJPY: markedUpPriceJPY, // 儲存加價 30% 後的金額
-              description: item.description_zh || '大阪府大阪市の厳選収益物件。',
-              tags: [item.type || '收益不動產', `預估 ROI ${item.roi || 7.5}%`],
+              priceJPY: markedUpPriceJPY, 
+              description: dynamicDesc,
+              roi: roiVal,
+              tags: [item.type || '收益不動產', `預估 ROI ${roiVal}%`],
               imageUrl: coverImage,
-              images: imageList,
+              images: parsedImages,
               lineLink: customLineLink,
               isFlagship: propId === 'prop-shinsai-wings'
             };
@@ -107,7 +139,7 @@ export default function Home() {
   }, []);
 
   // ----------------------------------------------------------------
-  // 📄 分頁計算邏輯
+  // 📄 分頁計算邏輯 (無跳動極速切換)
   // ----------------------------------------------------------------
   const totalPages = Math.ceil(properties.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -115,13 +147,13 @@ export default function Home() {
   const currentProperties = properties.slice(indexOfFirstItem, indexOfLastItem);
 
   const handlePageChange = (pageNumber) => {
+    if (pageNumber < 1 || pageNumber > totalPages) return;
     setCurrentPage(pageNumber);
-    // 平滑滾動回物件區頂部
-    document.getElementById('properties')?.scrollIntoView({ behavior: 'smooth' });
+    // 不再整頁滾動，流暢原地切換
   };
 
   // ----------------------------------------------------------------
-  // 📊 收益試算器 State & 計算邏輯
+  // 📊 收益試算器 State
   // ----------------------------------------------------------------
   const [propertyPriceJPY, setPropertyPriceJPY] = useState(12000); 
   const [dailyRateJPY, setDailyRateJPY] = useState(25000);
@@ -153,7 +185,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans scroll-smooth">
-      {/* 頂部導覽列 Header */}
+      {/* 頂部 Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -203,7 +235,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Banner 區塊 */}
+      {/* Banner */}
       <section className="bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 text-white py-16 px-4 text-center">
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="inline-flex items-center gap-2 bg-amber-500/20 text-amber-300 border border-amber-400/30 text-xs px-3.5 py-1 rounded-full font-bold">
@@ -243,15 +275,37 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 3. 精選與全網即時投資物件 (含分頁與多圖彈窗) */}
+        {/* 3. 精選與全網即時投資物件 (雙重頂底分頁控制列) */}
         <section id="properties" className="scroll-mt-20 space-y-6">
-          <div className="flex justify-between items-end">
+          
+          {/* 區塊標題 + 頂部快速分頁按鈕 */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-200 pb-4">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">精選與全網即時投資物件</h2>
               <p className="text-slate-500 text-sm mt-1">即時同步日本地產數據，具備 365 天特區民泊與高收益回報之標的</p>
             </div>
-            <div className="text-xs text-slate-500 font-semibold">
-              共 <span className="text-blue-600 font-bold text-base">{properties.length}</span> 筆物件 ｜ 第 <span className="text-slate-900 font-bold">{currentPage}</span> / {totalPages || 1} 頁
+            
+            {/* 頂部快捷換頁控制列 */}
+            <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+              <span className="text-xs text-slate-500 font-medium">
+                共 <span className="text-blue-600 font-bold">{properties.length}</span> 筆 ｜ <span className="text-slate-900 font-bold">{currentPage}</span> / {totalPages || 1} 頁
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-2.5 py-1 text-xs font-bold rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                >
+                  ◀ 上頁
+                </button>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-2.5 py-1 text-xs font-bold rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                >
+                  下頁 ▶
+                </button>
+              </div>
             </div>
           </div>
 
@@ -262,12 +316,12 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {/* 物件卡片網格 (每頁展示 12 筆) */}
+              {/* 物件卡片網格 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {currentProperties.map((item) => (
                   <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between">
                     
-                    {/* 物件封面圖與點擊開相簿 */}
+                    {/* 物件封面圖與開相簿 */}
                     <div className="relative h-48 bg-slate-100 cursor-pointer group" onClick={() => setActiveGallery(item)}>
                       <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                       
@@ -279,7 +333,6 @@ export default function Home() {
                         ))}
                       </div>
 
-                      {/* 多圖數量標籤 */}
                       <div className="absolute bottom-3 right-3 bg-slate-900/80 text-white text-[11px] font-medium px-2.5 py-1 rounded-md backdrop-blur-sm flex items-center gap-1">
                         📷 觀看相簿 ({item.images.length})
                       </div>
@@ -290,20 +343,22 @@ export default function Home() {
                       <div className="space-y-2">
                         <span className="text-xs text-blue-600 font-semibold">📍 {item.location} ‧ {item.structure}</span>
                         <h3 className="font-bold text-base text-slate-900 leading-snug line-clamp-1">{item.title}</h3>
+                        
+                        {/* 智慧動態描述 */}
                         <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">{item.description}</p>
                       </div>
 
                       <div className="space-y-3 border-t border-slate-100 pt-3">
                         <div className="flex justify-between items-end">
                           <div>
-                            <span className="text-[10px] text-slate-400 block">預售總價 (加價 30% 後包套價)</span>
+                            <span className="text-[10px] text-slate-400 block">預售總價 (加價 30% 包套價)</span>
                             <span className="font-black text-blue-600 text-xl">
                               {formatPropertyPrice(item.priceJPY)}
                             </span>
                           </div>
                         </div>
 
-                        {/* 動作按鈕：隱藏原始官網，換成兩顆功能按鈕 */}
+                        {/* 雙按鈕功能 */}
                         <div className="flex gap-2">
                           <button
                             onClick={() => setActiveGallery(item)}
@@ -327,7 +382,7 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* 📄 UI 質感頁碼與分頁選單 */}
+              {/* 底部分頁頁碼選單 */}
               {totalPages > 1 && (
                 <div className="flex justify-center items-center gap-2 pt-8">
                   <button
@@ -338,7 +393,6 @@ export default function Home() {
                     ◀ 上一頁
                   </button>
 
-                  {/* 頁碼數字按鈕 */}
                   <div className="flex items-center gap-1">
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum = currentPage;
@@ -373,7 +427,7 @@ export default function Home() {
           )}
         </section>
 
-        {/* 5. 專人諮詢 CTA */}
+        {/* 專人諮詢 */}
         <section className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-8 sm:p-12 text-center space-y-6">
           <div className="max-w-2xl mx-auto space-y-3">
             <h2 className="text-2xl sm:text-3xl font-extrabold">卡位大阪賭場黃金十年 ‧ 預約專人諮詢</h2>
@@ -393,7 +447,7 @@ export default function Home() {
         </section>
       </main>
 
-      {/* 🖼️ 多圖燈箱彈窗 (Lightbox Modal) */}
+      {/* 相簿彈窗 (Lightbox Modal) */}
       {activeGallery && (
         <div className="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setActiveGallery(null)}>
           <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
@@ -407,7 +461,6 @@ export default function Home() {
               </button>
             </div>
 
-            {/* 照片流 */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {activeGallery.images.map((imgUrl, index) => (
                 <div key={index} className="h-56 bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
