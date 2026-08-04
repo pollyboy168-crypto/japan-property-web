@@ -21,17 +21,16 @@ export default function Home() {
   };
 
   // ----------------------------------------------------------------
-  // 🏠 精選與自營房源資料庫 (包含 1.1 倍加價邏輯)
+  // 🏠 精選與自營房源資料庫 (Shinsai Wings 開價 1.2 億日圓)
   // ----------------------------------------------------------------
   const properties = [
     {
       id: 'prop-shinsai-wings',
-      title: '【和日直營/可出售】心齋橋圈 5層獨棟特區民泊 (Shinsai Wings)',
+      title: '【和日直營/旗艦出售】心齋橋圈 5層獨棟特區民泊 (Shinsai Wings)',
       location: '大阪市中央區',
       structure: '5層獨棟 S造 (鋼骨構造)',
-      originalPriceJPY: 88000000,
-      markupRate: 1.1, // 自動加價 10%
-      description: '1樓配備專業消防與合規格柵改建，2樓以上精裝旅宿格局。擁有 365 天合法營運執照，附帶現成滿房營運團隊。',
+      priceJPY: 120000000, // 正式開價 1 億 2 千萬日圓
+      description: '1樓配備專業消防與合規格柵改建，2-5樓精裝多人旅宿格局。擁有 365 天合法營運執照，附帶日本在地營運團隊無縫接軌。',
       tags: ['直營旗艦標的', '365天特區民泊', '格柵改建實績', '帶租約出售'],
       imageUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=800&q=80',
       isFlagship: true,
@@ -42,8 +41,7 @@ export default function Home() {
       title: '難波站徒步 6 分鐘 高人氣觀光獨棟套房',
       location: '大阪市浪速區',
       structure: 'RC 鋼筋混凝土構造',
-      originalPriceJPY: 35000000,
-      markupRate: 1.1,
+      priceJPY: 38500000, // 已含加價
       description: '地段極佳，觀光客住房率極高。現成日本在地團隊無縫接軌代管，買下即可享受穩定外幣被動收入。',
       tags: ['難波商圈', 'RC結構', '高住房率'],
       imageUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
@@ -54,8 +52,7 @@ export default function Home() {
       title: '此花區獨棟民宿 關西萬博與賭場受惠首選',
       location: '大阪市此花區',
       structure: '獨棟鋼構改建',
-      originalPriceJPY: 62000000,
-      markupRate: 1.1,
+      priceJPY: 68000000, // 已含加價
       description: '鄰近環球影城與夢洲賭場萬博會場，大坪數多人家庭房型，極具資產增值與租金翻倍潛力。',
       tags: ['萬博概念區', '特區民泊', '大坪數家庭房'],
       imageUrl: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
@@ -64,9 +61,9 @@ export default function Home() {
   ];
 
   // 試算器 State
-  const [propertyPriceJPY, setPropertyPriceJPY] = useState(8800);
-  const [dailyRateJPY, setDailyRateJPY] = useState(18000);
-  const [occupancyRate, setOccupancyRate] = useState(70);
+  const [propertyPriceJPY, setPropertyPriceJPY] = useState(12000); // 預設 1.2 億
+  const [dailyRateJPY, setDailyRateJPY] = useState(25000);
+  const [occupancyRate, setOccupancyRate] = useState(80);
   const [mgmtFeeRate, setMgmtFeeRate] = useState(20);
 
   // 財務試算邏輯
@@ -74,18 +71,17 @@ export default function Home() {
   const bookedDays = Math.round(365 * (occupancyRate / 100));
   const grossRevenueJPY = bookedDays * dailyRateJPY;
   const mgmtExpenseJPY = grossRevenueJPY * (mgmtFeeRate / 100);
-  const netRevenueJPY = grossRevenueJPY - mgmtExpenseJPY - 500000;
+  const netRevenueJPY = grossRevenueJPY - mgmtExpenseJPY - 600000;
   const grossYield = ((grossRevenueJPY / priceInJPY) * 100).toFixed(2);
   const netYield = Math.max(0, (netRevenueJPY / priceInJPY) * 100).toFixed(2);
 
   // 格式化顯示
-  const formatPropertyPrice = (originalJPY, markup = 1.1) => {
-    const finalJPY = originalJPY * markup;
+  const formatPropertyPrice = (amountJPY) => {
     if (currency === 'TWD') {
-      const twd = Math.round(finalJPY * jpyToTwd);
+      const twd = Math.round(amountJPY * jpyToTwd);
       return `NT$ ${(twd / 10000).toFixed(0)} 萬`;
     }
-    return `¥ ${(finalJPY / 10000).toLocaleString()} 萬日圓`;
+    return `¥ ${(amountJPY / 10000).toLocaleString()} 萬日圓`;
   };
 
   const formatMoney = (amountJPY) => {
@@ -96,7 +92,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans scroll-smooth">
       {/* 頂部導覽列 Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -111,6 +107,14 @@ export default function Home() {
               </span>
             </div>
           </div>
+
+          {/* 中央選單連結 */}
+          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-600">
+            <a href="#calculator" className="hover:text-blue-600 transition">投資試算</a>
+            <a href="#properties" className="hover:text-blue-600 transition">精選物件</a>
+            <a href="#flagship" className="hover:text-blue-600 transition">民宿特輯 (Shinsai Wings)</a>
+            <a href="#cases" className="hover:text-blue-600 transition">改建成功案例</a>
+          </nav>
           
           <div className="flex items-center gap-3">
             {/* 幣別切換 */}
@@ -136,7 +140,7 @@ export default function Home() {
               rel="noopener noreferrer"
               className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 shadow-sm"
             >
-              <span>💬</span> LINE 專人諮詢
+              <span>💬</span> LINE 諮詢
             </a>
           </div>
         </div>
@@ -154,19 +158,26 @@ export default function Home() {
           <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto">
             由【株式会社和日】在地親自營運！提供從精準選址、1樓合規格柵改建、消防許可申請，到在地團隊代管接單與資產出售的一站式服務。
           </p>
+
+          {/* 快捷切換按鈕 */}
+          <div className="flex flex-wrap justify-center gap-3 pt-4">
+            <a href="#calculator" className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition">📊 收益試算</a>
+            <a href="#flagship" className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold px-4 py-2 rounded-lg transition">👑 旗艦物業 1.2億日圓</a>
+            <a href="#cases" className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition">🛠️ 改建實績</a>
+          </div>
         </div>
       </section>
 
-      {/* 核心功能與物件展示 */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
+      {/* 核心內容區 */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
         
-        {/* 1. 投報率計算機 */}
-        <section className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+        {/* 1. 投報率計算機 (id="calculator") */}
+        <section id="calculator" className="scroll-mt-20 bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
           <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
             <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
               <span>📊</span> 日本民宿投資收益模擬試算器 (ROI Calculator)
             </h2>
-            <span className="text-xs text-slate-400">實時根據參數試算</span>
+            <span className="text-xs text-slate-400">實時試算</span>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 sm:p-8">
@@ -223,8 +234,65 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 2. 精選與直營房源展示 */}
-        <section className="space-y-6">
+        {/* 2. 民宿特輯：Shinsai Wings 旗艦物件深剖 (id="flagship") */}
+        <section id="flagship" className="scroll-mt-20 bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 text-white rounded-3xl p-8 sm:p-12 border border-amber-500/30 shadow-2xl space-y-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
+            <div>
+              <span className="bg-amber-500 text-slate-900 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
+                👑 株式會社和日 直營旗艦物業
+              </span>
+              <h2 className="text-2xl sm:text-4xl font-extrabold mt-3">心齋橋圈 5層獨棟特區民泊 (Shinsai Wings)</h2>
+              <p className="text-slate-400 text-sm mt-1">完美改建示範標的 ‧ 帶 365 天執照與現成營運團隊出售</p>
+            </div>
+            <div className="text-right bg-slate-800/90 p-4 rounded-2xl border border-amber-500/40">
+              <span className="text-xs text-slate-400 block font-medium">獨家售價 (Exit Price)</span>
+              <span className="text-3xl font-black text-amber-400">{formatPropertyPrice(120000000)}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/80 space-y-2">
+              <div className="text-2xl">🏗️</div>
+              <h3 className="font-bold text-lg text-white">1 樓專業格柵與消防工程</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                由和佑工程團隊親自規劃，1 樓完成合規格柵工法與結構強化，2-5 樓完美保持旅宿格局，順利通過日本消防嚴格複驗。
+              </p>
+            </div>
+
+            <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/80 space-y-2">
+              <div className="text-2xl">📜</div>
+              <h3 className="font-bold text-lg text-white">365 天特區民泊營業許可</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                擺脫一般民宿 180 天營運限制！擁有大阪特區民泊/旅館業完整許可，全年 365 天無間斷接單，收益最大化。
+              </p>
+            </div>
+
+            <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/80 space-y-2">
+              <div className="text-2xl">🤝</div>
+              <h3 className="font-bold text-lg text-white">在地 Max 團隊無縫接管</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                附帶成熟營運軟硬體！由日本在地經理團隊 Max 負責清潔、現場房客對應與多平台接單，買下即刻接手穩定現金流。
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-800/50 p-6 rounded-2xl border border-slate-800">
+            <div className="text-xs text-slate-300">
+              💡 歡迎預約現場/線上看房，或點擊連結查看房客預訂實況與評價。
+            </div>
+            <a
+              href={companyInfo.flagshipUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-6 py-2.5 rounded-xl transition text-sm flex items-center gap-2 shadow-lg"
+            >
+              🌐 前往 Shinsai Wings 房客預訂官網 ➔
+            </a>
+          </div>
+        </section>
+
+        {/* 3. 精選房源展示 (id="properties") */}
+        <section id="properties" className="scroll-mt-20 space-y-6">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">精選與直營投資物件</h2>
             <p className="text-slate-500 text-sm mt-1">經株式会社和日團隊勘查，具備 1 樓格柵改建與 365 天民泊執照之優質物件</p>
@@ -254,9 +322,9 @@ export default function Home() {
                   <div className="space-y-2 border-t border-slate-100 pt-3">
                     <div className="flex justify-between items-end">
                       <div>
-                        <span className="text-[10px] text-slate-400 block">售價 (含託管方案)</span>
+                        <span className="text-[10px] text-slate-400 block">預售價格 (含代管)</span>
                         <span className="font-black text-blue-600 text-lg">
-                          {formatPropertyPrice(item.originalPriceJPY, item.markupRate)}
+                          {formatPropertyPrice(item.priceJPY)}
                         </span>
                       </div>
                       <a
@@ -268,17 +336,6 @@ export default function Home() {
                         預約看房/索取資料
                       </a>
                     </div>
-
-                    {item.isFlagship && (
-                      <a
-                        href={item.externalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-center text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 py-1 rounded hover:bg-amber-100 transition"
-                      >
-                        🌐 參觀 Shinsai Wings 民宿實體官網 ➔
-                      </a>
-                    )}
                   </div>
                 </div>
               </div>
@@ -286,7 +343,42 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 3. 日本官方公司背景信任區 */}
+        {/* 4. 改建成功案例 (id="cases") */}
+        <section id="cases" className="scroll-mt-20 bg-white rounded-2xl p-8 border border-slate-200 shadow-sm space-y-8">
+          <div className="border-b border-slate-100 pb-4">
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Proven Track Record</span>
+            <h2 className="text-2xl font-bold text-slate-900 mt-1">一站式改建與營運成功案例</h2>
+            <p className="text-slate-500 text-sm mt-1">我們如何幫舊獨棟物業注入高價值，變成高回報民泊資產？</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-3 bg-slate-50 p-5 rounded-xl border border-slate-200">
+              <div className="text-blue-600 font-bold text-sm">步驟 01 ‧ 精準選址與結構評估</div>
+              <h3 className="font-bold text-slate-900">獨棟 S 造/鋼構大樓篩選</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                挑選位於心齋橋、難波等高觀光流量區域，且建物構造具備特區民泊申請資格的獨棟建築。
+              </p>
+            </div>
+
+            <div className="space-y-3 bg-slate-50 p-5 rounded-xl border border-slate-200">
+              <div className="text-blue-600 font-bold text-sm">步驟 02 ‧ 1樓格柵與消防審查</div>
+              <h3 className="font-bold text-slate-900">工程改建與法規認證</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                進行 1 樓外觀格柵工程升級與內部消防設備安裝，順利通過大阪保健所與消防局合規檢查。
+              </p>
+            </div>
+
+            <div className="space-y-3 bg-slate-50 p-5 rounded-xl border border-slate-200">
+              <div className="text-blue-600 font-bold text-sm">步驟 03 ‧ 在地營運與帶租約 Exit</div>
+              <h3 className="font-bold text-slate-900">託管接單與資產增值</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                由在地 Max 團隊對應國際觀光客，創造穩定高住房率後，掛牌帶租約出售給海外買家。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 5. 日本官方公司背景信任區 */}
         <section className="bg-slate-900 text-white rounded-2xl p-8 space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
             <div>
@@ -314,7 +406,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 4. 專人諮詢 CTA */}
+        {/* 6. 專人諮詢 CTA */}
         <section className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-8 sm:p-12 text-center space-y-6">
           <div className="max-w-2xl mx-auto space-y-3">
             <h2 className="text-2xl sm:text-3xl font-extrabold">貼上您看中的日本房產網址</h2>
