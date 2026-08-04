@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // ----------------------------------------------------------------
-// 🏢 1. 日本法人與真實聯絡資訊設定區
+// 🏢 1. 日本法人與官方 LINE 帳號設定
 // ----------------------------------------------------------------
 const OFFICIAL_LINE_ID = "@267fmlaq";
 const OFFICIAL_LINE_URL = `https://line.me/ti/p/${OFFICIAL_LINE_ID}`;
@@ -14,27 +14,27 @@ const companyInfo = {
   jpCompanyEn: 'Kazuhi Co., Ltd.',
   address: '大阪府大阪市中央区日本橋二丁目8-15',
   licenseNo: '法人番号 1200-01-288148',
-  lineUrl: OFFICIAL_LINE_URL, // 💡 強制全站預設使用官方 LINE
+  lineUrl: OFFICIAL_LINE_URL, // 💡 全站按鈕預設導向官方 LINE
   email: 'contact@kazuhi-property.com',
   flagshipUrl: 'https://www.shinsai-wings-osakastay.com/'
 };
 
 // ----------------------------------------------------------------
-// 💡 2. Supabase Client 設定 (已補齊真實 URL 與帶有容錯備份機制的金鑰)
+// 💡 2. Supabase Client 初始化設定
+// ⚠️ 請確保將後方的 'YOUR_SUPABASE_ANON_KEY_HERE' 替換為您的 Supabase anon public key！
 // ----------------------------------------------------------------
 const SUPABASE_URL = 'https://nfegislkpuzqylwcfnoc.supabase.co';
-
-// ⚠️ 嘗試從環境變數讀取，若無則請在此貼上 Supabase -> Project Settings -> API -> anon public key
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY_HERE'; 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export default function Home() {
-  const [currency, setCurrency] = useState('JPY');
+  // 匯率與貨幣設定 (以 1 JPY = 0.21 TWD 估算)
+  const [currency, setCurrency] = useState('JPY'); 
   const jpyToTwd = 0.21;
 
   // ----------------------------------------------------------------
-  // 🏠 3. 動態物件資料庫 (解開 100 筆限制 + 補齊 LINE 對接)
+  // 🏠 3. 動態物件資料庫 (解開 100 筆限制 + 帶入 Console 除錯)
   // ----------------------------------------------------------------
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,9 @@ export default function Home() {
   useEffect(() => {
     async function fetchOsakaProperties() {
       try {
-        // 💡 突破預設 100 筆限制，拉取前 1000 筆資料
+        console.log("🔍 開始嘗試連線至 Supabase 抓取資料...");
+
+        // 💡 使用 .range(0, 999) 突破 Supabase 預設 100 筆限制，一次抓齊所有物件
         const { data, error } = await supabase
           .from('properties')
           .select('*')
@@ -50,18 +52,21 @@ export default function Home() {
           .order('created_at', { ascending: false });
 
         if (error) {
-          console.error('Supabase 讀取錯誤:', error);
-        } else if (data && data.length > 0) {
+          console.error('❌ Supabase 讀取失敗！錯誤原因:', error);
+          return;
+        }
+
+        console.log(`✅ 成功從 Supabase 抓取到 ${data?.length || 0} 筆物件資料！`, data);
+
+        if (data && data.length > 0) {
           const mappedData = data.map((item) => {
             const propTitle = item.title_zh || '大阪精選投資物業';
             const propId = item.id || '';
             const propPrice = item.price_jpy ? `${Math.round(item.price_jpy / 10000)}萬円` : '';
             
-            // 💡 強制所有 LINE 諮詢連結均傳遞至官方帳號 @267fmlaq，並帶上完整的物件諮詢訊息
+            // 💡 建立帶有物件詳細資訊的專屬 LINE 諮詢轉跳訊息
             const defaultMsg = `您好！我對【${propTitle}】(編號: ${propId} / 售價: ${propPrice}) 感興趣，請提供詳細資料與專員對接！`;
-            const customLineLink = item.line_link && item.line_link.includes('@267fmlaq') 
-              ? item.line_link 
-              : `https://line.me/ti/p/${OFFICIAL_LINE_ID}?text=${encodeURIComponent(defaultMsg)}`;
+            const customLineLink = `https://line.me/ti/p/${OFFICIAL_LINE_ID}?text=${encodeURIComponent(defaultMsg)}`;
 
             return {
               id: propId,
@@ -73,7 +78,7 @@ export default function Home() {
               tags: [item.type || '收益不動產', `預估 ROI ${item.roi}%`],
               imageUrl: item.image_url || (item.images && item.images[0]) || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=800&q=80',
               images: item.images || [],
-              lineLink: customLineLink, // 全數歸一導向官方 LINE
+              lineLink: customLineLink, // 強制所有物件導向官方 LINE @267fmlaq
               originalUrl: item.original_url || 'https://www.kenbiya.com/',
               isFlagship: propId === 'prop-shinsai-wings'
             };
@@ -82,7 +87,7 @@ export default function Home() {
           setProperties(mappedData);
         }
       } catch (err) {
-        console.error('無法連線至 Supabase:', err);
+        console.error('💥 程式執行發生異常:', err);
       } finally {
         setLoading(false);
       }
@@ -91,13 +96,14 @@ export default function Home() {
     fetchOsakaProperties();
   }, []);
 
-  // 試算器 State
-  const [propertyPriceJPY, setPropertyPriceJPY] = useState(12000);
+  // ----------------------------------------------------------------
+  // 📊 4. 收益試算器 State & 計算邏輯
+  // ----------------------------------------------------------------
+  const [propertyPriceJPY, setPropertyPriceJPY] = useState(12000); 
   const [dailyRateJPY, setDailyRateJPY] = useState(25000);
   const [occupancyRate, setOccupancyRate] = useState(80);
   const [mgmtFeeRate, setMgmtFeeRate] = useState(20);
 
-  // 財務試算邏輯
   const priceInJPY = propertyPriceJPY * 10000;
   const bookedDays = Math.round(365 * (occupancyRate / 100));
   const grossRevenueJPY = bookedDays * dailyRateJPY;
@@ -106,7 +112,6 @@ export default function Home() {
   const grossYield = ((grossRevenueJPY / priceInJPY) * 100).toFixed(2);
   const netYield = Math.max(0, (netRevenueJPY / priceInJPY) * 100).toFixed(2);
 
-  // 格式化顯示
   const formatPropertyPrice = (amountJPY) => {
     if (currency === 'TWD') {
       const twd = Math.round(amountJPY * jpyToTwd);
@@ -164,7 +169,7 @@ export default function Home() {
               </button>
             </div>
 
-            {/* 官方 LINE 按鈕 */}
+            {/* 官方 LINE 客服按鈕 */}
             <a
               href={OFFICIAL_LINE_URL}
               target="_blank"
@@ -201,7 +206,7 @@ export default function Home() {
       {/* 核心內容區 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
         
-        {/* 大阪四大投資吸引力 */}
+        {/* 🔥 大阪四大投資吸引力 */}
         <section id="why-osaka" className="scroll-mt-20 bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-lg space-y-8">
           <div className="text-center max-w-3xl mx-auto space-y-2">
             <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Core Investment Value</span>
@@ -350,7 +355,7 @@ export default function Home() {
 
             <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/80 space-y-2">
               <div className="text-2xl">🤝</div>
-              <h3 className="font-bold text-lg text-white">在地 Max 團隊無縫接管</h3>
+              <h3 className="font-bold text-lg text-white">在地 Max 團隊無缝接管</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
                 由日本在地經理團隊 Max 負責清潔、現場房客對應與多平台接單，買下即刻接手穩定被動現金流。
               </p>
@@ -372,7 +377,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 3. 精選與全網即時投資物件 (突破 100 筆限制 + 200+ 筆完整展現) */}
+        {/* 3. 精選與全網即時投資物件 (突破 100 筆限制) */}
         <section id="properties" className="scroll-mt-20 space-y-6">
           <div className="flex justify-between items-end">
             <div>
