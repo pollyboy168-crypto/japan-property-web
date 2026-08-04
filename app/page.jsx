@@ -24,7 +24,7 @@ const companyInfo = {
 // ⚠️ 請確保將後方的 'YOUR_SUPABASE_ANON_KEY_HERE' 替換為您的 Supabase anon public key！
 // ----------------------------------------------------------------
 const SUPABASE_URL = 'https://nfegislkpuzqylwcfnoc.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY_HERE'; 
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ceNh3H1XvVzubJW7uKv3Rw_pujGphDu'; 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
