@@ -110,10 +110,10 @@ export default function Home() {
 
           {/* 中央選單連結 */}
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-600">
-            <a href="#why-osaka" className="hover:text-blue-600 transition">大阪核心價值</a>
+            <a href="#why-osaka" className="hover:text-blue-600 transition">大阪核心吸引力</a>
             <a href="#calculator" className="hover:text-blue-600 transition">投資試算</a>
-            <a href="#properties" className="hover:text-blue-600 transition">精選物件</a>
             <a href="#flagship" className="hover:text-blue-600 transition">旗艦民宿 (Shinsai Wings)</a>
+            <a href="#properties" className="hover:text-blue-600 transition">精選物件</a>
           </nav>
           
           <div className="flex items-center gap-3">
@@ -140,7 +140,7 @@ export default function Home() {
               rel="noopener noreferrer"
               className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 shadow-sm"
             >
-              <span>💬</span> LINE 專人諮詢
+              <span>💬</span> LINE 諮詢
             </a>
           </div>
         </div>
@@ -161,7 +161,7 @@ export default function Home() {
 
           {/* 快捷切換按鈕 */}
           <div className="flex flex-wrap justify-center gap-3 pt-4">
-            <a href="#why-osaka" className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold px-4 py-2 rounded-lg transition">🎰 大阪四大核心價值</a>
+            <a href="#why-osaka" className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold px-4 py-2 rounded-lg transition">🎰 大阪四大投資吸引力</a>
             <a href="#calculator" className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition">📊 收益試算</a>
             <a href="#flagship" className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-bold px-4 py-2 rounded-lg transition">👑 旗艦獨棟物業</a>
           </div>
@@ -171,46 +171,54 @@ export default function Home() {
       {/* 核心內容區 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
         
-        {/* 🔥 新增核心亮點：為什麼選擇大阪？四大投資吸引力分析 (id="why-osaka") */}
-        <section id="why-osaka" className="scroll-mt-20 bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-sm space-y-8">
+        {/* 🔥🔥 核心亮點專區：為什麼投資大阪房產？四大致命吸引力 (id="why-osaka") */}
+        <section id="why-osaka" className="scroll-mt-20 bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-lg space-y-8">
           <div className="text-center max-w-3xl mx-auto space-y-2">
-            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Why Invest in Osaka</span>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900">為什麼現在是佈局大阪地產的黃金時機？</h2>
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Core Investment Value</span>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900">為什麼現在是佈局大阪房產的最佳時機？</h2>
             <p className="text-slate-500 text-sm">結合國家級重大建設與極致高CP值，兼具投資獲利與自住傳承價值</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* 1. 夢洲賭場紅利 */}
-            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-6 sm:p-8 rounded-2xl space-y-3 relative overflow-hidden">
+            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-6 sm:p-8 rounded-2xl space-y-3 relative overflow-hidden shadow-md">
               <div className="text-amber-400 text-3xl font-black">01</div>
-              <h3 className="text-xl font-bold">2030 大阪夢洲 IR 綜合度假村 (賭場)</h3>
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <span>🎰</span> 2030 大阪夢洲 IR 綜合度假村 (賭場)
+              </h3>
               <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
                 日本首座合法博弈綜合度假村（IR）確定落腳大阪夢洲！預計每年帶來數千億日圓觀光經濟效益與千萬國際賭客，鄰近捷運線房價與民泊住房率將迎來黃金十年暴增期。
               </p>
             </div>
 
             {/* 2. 土地永久產權 */}
-            <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3">
+            <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3 shadow-sm hover:shadow-md transition">
               <div className="text-blue-600 text-3xl font-black">02</div>
-              <h3 className="text-xl font-bold text-slate-900">土地永久產權 (所有權傳承)</h3>
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <span>🏯</span> 土地永久產權 (世襲代代相傳)
+              </h3>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                 買日本房子等於連同「土地」一併永久買下！不同於部分國家的地上權或租賃權，日本地產為世襲制永久產權，無使用年限，能作為代代相傳的家族堅實資產。
               </p>
             </div>
 
             {/* 3. 價格比台灣親民 */}
-            <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3">
+            <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3 shadow-sm hover:shadow-md transition">
               <div className="text-emerald-600 text-3xl font-black">03</div>
-              <h3 className="text-xl font-bold text-slate-900">房價比台灣親民，基期低回報高</h3>
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <span>💰</span> 房價比台灣親民，基期低回報高
+              </h3>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                 台北新北一套老公寓的價格，在大阪市中心（心齋橋/難波）就能買下整棟鋼構大樓或透天厝！低房價門檻配上 $6\% - 10\%$ 的高淨回報，性價比遠勝台港與東南亞。
               </p>
             </div>
 
             {/* 4. 特區民泊 365 天營運 */}
-            <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3">
+            <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3 shadow-sm hover:shadow-md transition">
               <div className="text-indigo-600 text-3xl font-black">04</div>
-              <h3 className="text-xl font-bold text-slate-900">大阪特區民泊 365 天全年營運</h3>
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <span>📅</span> 大阪特區民泊 365 天全年營運
+              </h3>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
                 大阪擁有日本少有的「特區民泊」法規優勢，突破一般民宿 180 天的限制！配合株式会社和日在地改建與代管，讓您的資產一年 365 天無間斷產生日圓現金流。
               </p>
