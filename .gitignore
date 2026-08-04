@@ -4,4 +4,4 @@ node_modules
 out
 build
 .DS_Store
-*.log
+*.logpackage-lock.json 
