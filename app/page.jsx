@@ -4,33 +4,37 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // ----------------------------------------------------------------
-// 💡 初始化 Supabase 用戶端 (請確認 URL 與 Key)
+// 🏢 1. 日本法人與真實聯絡資訊設定區
+// ----------------------------------------------------------------
+const OFFICIAL_LINE_ID = "@267fmlaq";
+const OFFICIAL_LINE_URL = `https://line.me/ti/p/${OFFICIAL_LINE_ID}`;
+
+const companyInfo = {
+  jpCompanyName: '株式会社和日',
+  jpCompanyEn: 'Kazuhi Co., Ltd.',
+  address: '大阪府大阪市中央区日本橋二丁目8-15',
+  licenseNo: '法人番号 1200-01-288148',
+  lineUrl: OFFICIAL_LINE_URL, // 💡 強制全站預設使用官方 LINE
+  email: 'contact@kazuhi-property.com',
+  flagshipUrl: 'https://www.shinsai-wings-osakastay.com/'
+};
+
+// ----------------------------------------------------------------
+// 💡 2. Supabase Client 設定 (已補齊真實 URL 與帶有容錯備份機制的金鑰)
 // ----------------------------------------------------------------
 const SUPABASE_URL = 'https://nfegislkpuzqylwcfnoc.supabase.co';
-// ⚠️ 請填入您在 Supabase -> Project Settings -> API 頁面複製的 anon public key
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE'; 
+
+// ⚠️ 嘗試從環境變數讀取，若無則請在此貼上 Supabase -> Project Settings -> API -> anon public key
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY_HERE'; 
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export default function Home() {
-  // 匯率與貨幣設定 (以 1 JPY = 0.21 TWD 估算)
-  const [currency, setCurrency] = useState('JPY'); // 'JPY' | 'TWD'
+  const [currency, setCurrency] = useState('JPY');
   const jpyToTwd = 0.21;
 
   // ----------------------------------------------------------------
-  // 🏢 日本法人與真實聯絡資訊設定區
-  // ----------------------------------------------------------------
-  const companyInfo = {
-    jpCompanyName: '株式会社和日',
-    jpCompanyEn: 'Kazuhi Co., Ltd.',
-    address: '大阪府大阪市中央区日本橋二丁目8-15',
-    licenseNo: '法人番号 1200-01-288148',
-    lineUrl: 'https://line.me/ti/p/@267fmlaq', // 💡 官方 LINE 諮詢連結
-    email: 'contact@kazuhi-property.com',
-    flagshipUrl: 'https://www.shinsai-wings-osakastay.com/' // 旗艦民宿網址
-  };
-
-  // ----------------------------------------------------------------
-  // 🏠 動態物件資料庫 (改從 Supabase 自動讀取 200+ 筆)
+  // 🏠 3. 動態物件資料庫 (解開 100 筆限制 + 補齊 LINE 對接)
   // ----------------------------------------------------------------
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,29 +42,43 @@ export default function Home() {
   useEffect(() => {
     async function fetchOsakaProperties() {
       try {
+        // 💡 突破預設 100 筆限制，拉取前 1000 筆資料
         const { data, error } = await supabase
           .from('properties')
           .select('*')
+          .range(0, 999) 
           .order('created_at', { ascending: false });
 
         if (error) {
           console.error('Supabase 讀取錯誤:', error);
         } else if (data && data.length > 0) {
-          // 將 Supabase 資料庫欄位對接至 React 卡片格式
-          const mappedData = data.map((item) => ({
-            id: item.id,
-            title: item.title_zh || '大阪精選投資物業',
-            location: item.location || '大阪府大阪市',
-            structure: item.type || '收益型不動產/民泊',
-            priceJPY: item.price_jpy || 50000000,
-            description: item.description_zh || '大阪府大阪市の厳選収益物件。',
-            tags: [item.type || '收益不動產', `預估 ROI ${item.roi}%`],
-            imageUrl: item.image_url || (item.images && item.images[0]) || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=800&q=80',
-            images: item.images || [],
-            lineLink: item.line_link || companyInfo.lineUrl,
-            originalUrl: item.original_url || 'https://www.kenbiya.com/',
-            isFlagship: item.id === 'prop-shinsai-wings'
-          }));
+          const mappedData = data.map((item) => {
+            const propTitle = item.title_zh || '大阪精選投資物業';
+            const propId = item.id || '';
+            const propPrice = item.price_jpy ? `${Math.round(item.price_jpy / 10000)}萬円` : '';
+            
+            // 💡 強制所有 LINE 諮詢連結均傳遞至官方帳號 @267fmlaq，並帶上完整的物件諮詢訊息
+            const defaultMsg = `您好！我對【${propTitle}】(編號: ${propId} / 售價: ${propPrice}) 感興趣，請提供詳細資料與專員對接！`;
+            const customLineLink = item.line_link && item.line_link.includes('@267fmlaq') 
+              ? item.line_link 
+              : `https://line.me/ti/p/${OFFICIAL_LINE_ID}?text=${encodeURIComponent(defaultMsg)}`;
+
+            return {
+              id: propId,
+              title: propTitle,
+              location: item.location || '大阪府大阪市',
+              structure: item.type || '收益型不動產/民泊',
+              priceJPY: item.price_jpy || 50000000,
+              description: item.description_zh || '大阪府大阪市の厳選収益物件。',
+              tags: [item.type || '收益不動產', `預估 ROI ${item.roi}%`],
+              imageUrl: item.image_url || (item.images && item.images[0]) || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=800&q=80',
+              images: item.images || [],
+              lineLink: customLineLink, // 全數歸一導向官方 LINE
+              originalUrl: item.original_url || 'https://www.kenbiya.com/',
+              isFlagship: propId === 'prop-shinsai-wings'
+            };
+          });
+
           setProperties(mappedData);
         }
       } catch (err) {
@@ -74,7 +92,7 @@ export default function Home() {
   }, []);
 
   // 試算器 State
-  const [propertyPriceJPY, setPropertyPriceJPY] = useState(12000); // 預設 1.2 億
+  const [propertyPriceJPY, setPropertyPriceJPY] = useState(12000);
   const [dailyRateJPY, setDailyRateJPY] = useState(25000);
   const [occupancyRate, setOccupancyRate] = useState(80);
   const [mgmtFeeRate, setMgmtFeeRate] = useState(20);
@@ -146,9 +164,9 @@ export default function Home() {
               </button>
             </div>
 
-            {/* LINE 官方按鈕 */}
+            {/* 官方 LINE 按鈕 */}
             <a
-              href={companyInfo.lineUrl}
+              href={OFFICIAL_LINE_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 shadow-sm"
@@ -183,7 +201,7 @@ export default function Home() {
       {/* 核心內容區 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
         
-        {/* 🔥 大阪四大投資吸引力 (id="why-osaka") */}
+        {/* 大阪四大投資吸引力 */}
         <section id="why-osaka" className="scroll-mt-20 bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 shadow-lg space-y-8">
           <div className="text-center max-w-3xl mx-auto space-y-2">
             <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Core Investment Value</span>
@@ -234,7 +252,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 1. 投報率計算機 (id="calculator") */}
+        {/* 1. 投報率計算機 */}
         <section id="calculator" className="scroll-mt-20 bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
           <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
             <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
@@ -297,7 +315,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 2. 民宿特輯：Shinsai Wings 旗艦物件 (id="flagship") */}
+        {/* 2. 民宿特輯：Shinsai Wings 旗艦物件 */}
         <section id="flagship" className="scroll-mt-20 bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 text-white rounded-3xl p-8 sm:p-12 border border-amber-500/30 shadow-2xl space-y-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
             <div>
@@ -354,7 +372,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 3. 精選房源展示區 (改為動態渲染 Supabase 200+ 筆物件) */}
+        {/* 3. 精選與全網即時投資物件 (突破 100 筆限制 + 200+ 筆完整展現) */}
         <section id="properties" className="scroll-mt-20 space-y-6">
           <div className="flex justify-between items-end">
             <div>
@@ -369,7 +387,7 @@ export default function Home() {
           {loading ? (
             <div className="text-center py-16 text-slate-400">
               <div className="animate-spin text-3xl mb-2">🌀</div>
-              正在從 Supabase 載入最新大阪物業資料庫...
+              正在從 Supabase 載入最新 200+ 筆大阪物業資料庫...
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -393,8 +411,6 @@ export default function Home() {
                     <div className="space-y-2">
                       <span className="text-xs text-blue-600 font-semibold">📍 {item.location} ‧ {item.structure}</span>
                       <h3 className="font-bold text-base text-slate-900 leading-snug line-clamp-1">{item.title}</h3>
-                      
-                      {/* 日本官網原汁原味摘要描述 */}
                       <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">{item.description}</p>
                     </div>
 
@@ -408,6 +424,7 @@ export default function Home() {
                         </div>
                       </div>
 
+                      {/* 動作按鈕：原始官網 + 直通官方 LINE (@267fmlaq) */}
                       <div className="flex gap-2">
                         {item.originalUrl && (
                           <a
@@ -476,7 +493,7 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-2">
             <a
-              href={companyInfo.lineUrl}
+              href={OFFICIAL_LINE_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-xl transition shadow-lg text-sm flex items-center justify-center gap-2"
