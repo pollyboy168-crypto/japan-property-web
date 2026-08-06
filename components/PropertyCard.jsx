@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import FavoriteButton from '@/components/FavoriteButton';
 
-export default function PropertyCard({ item, priceLabel, onViewGallery }) {
+export default function PropertyCard({ item, priceLabel, onViewGallery, onToggleFavorite }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between">
 
@@ -15,6 +16,12 @@ export default function PropertyCard({ item, priceLabel, onViewGallery }) {
             </span>
           ))}
         </div>
+
+        <FavoriteButton
+          propertyId={item.id}
+          onToggle={onToggleFavorite}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-900/60 backdrop-blur-sm text-lg"
+        />
 
         <div className="absolute bottom-3 right-3 bg-slate-900/80 text-white text-[11px] font-medium px-2.5 py-1 rounded-md backdrop-blur-sm flex items-center gap-1">
           📷 觀看相簿 ({item.images.length})

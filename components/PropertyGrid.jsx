@@ -9,7 +9,11 @@ export default function PropertyGrid({
   totalPages,
   onPageChange,
   currency,
-  onViewGallery
+  onViewGallery,
+  onToggleFavorite,
+  favoritesCount,
+  showFavoritesOnly,
+  onToggleFavoritesOnly
 }) {
   return (
     <section id="properties" className="scroll-mt-20 space-y-6">
@@ -23,6 +27,12 @@ export default function PropertyGrid({
 
         {/* 頂部快捷換頁控制列 */}
         <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+          <button
+            onClick={onToggleFavoritesOnly}
+            className={`text-xs font-bold px-2.5 py-1 rounded transition flex items-center gap-1 ${showFavoritesOnly ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          >
+            {showFavoritesOnly ? '❤️' : '🤍'} 只看收藏 ({favoritesCount})
+          </button>
           <span className="text-xs text-slate-500 font-medium">
             共 <span className="text-blue-600 font-bold">{propertiesCount}</span> 筆 ｜ <span className="text-slate-900 font-bold">{currentPage}</span> / {totalPages || 1} 頁
           </span>
@@ -45,7 +55,11 @@ export default function PropertyGrid({
         </div>
       </div>
 
-      {loading ? (
+      {!loading && showFavoritesOnly && currentProperties.length === 0 ? (
+        <div className="text-center py-16 text-slate-400 text-sm">
+          還沒有收藏任何物件，點物件卡右上角的 🤍 就可以收藏。
+        </div>
+      ) : loading ? (
         <div className="text-center py-16 text-slate-400">
           <div className="animate-spin text-3xl mb-2">🌀</div>
           正在載入最新 400+ 筆大阪物業資料庫...
@@ -60,6 +74,7 @@ export default function PropertyGrid({
                 item={item}
                 priceLabel={formatPropertyPrice(item.priceJPY, currency)}
                 onViewGallery={onViewGallery}
+                onToggleFavorite={onToggleFavorite}
               />
             ))}
           </div>

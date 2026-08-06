@@ -10,7 +10,9 @@ import ContactCta from '@/components/ContactCta';
 import GalleryModal from '@/components/GalleryModal';
 import SiteFooter from '@/components/SiteFooter';
 import LineFab from '@/components/LineFab';
+import RecentlyViewedRail from '@/components/RecentlyViewedRail';
 import { getAllProperties } from '@/lib/properties';
+import { getFavorites } from '@/lib/clientStorage';
 
 export default function Home() {
   const [currency, setCurrency] = useState('JPY');
@@ -26,19 +28,39 @@ export default function Home() {
 
   const [activeGallery, setActiveGallery] = useState(null);
 
+  // ----------------------------------------------------------------
+  // ❤ 收藏清單 State（localStorage，訪客個人紀錄，非登入帳號）
+  // ----------------------------------------------------------------
+  const [favorites, setFavorites] = useState([]);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
   useEffect(() => {
     getAllProperties()
       .then(setProperties)
       .finally(() => setLoading(false));
+    setFavorites(getFavorites());
   }, []);
+
+  const handleFavoriteToggled = () => {
+    setFavorites(getFavorites());
+  };
+
+  const handleToggleFavoritesOnly = () => {
+    setShowFavoritesOnly((prev) => !prev);
+    setCurrentPage(1);
+  };
 
   // ----------------------------------------------------------------
   // 📄 分頁計算邏輯 (無跳動極速切換)
   // ----------------------------------------------------------------
-  const totalPages = Math.ceil(properties.length / itemsPerPage);
+  const visibleProperties = showFavoritesOnly
+    ? properties.filter((item) => favorites.includes(item.id))
+    : properties;
+
+  const totalPages = Math.ceil(visibleProperties.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProperties = properties.slice(indexOfFirstItem, indexOfLastItem);
+  const currentProperties = visibleProperties.slice(indexOfFirstItem, indexOfLastItem);
 
   const handlePageChange = (pageNumber) => {
     if (pageNumber < 1 || pageNumber > totalPages) return;
@@ -61,8 +83,10 @@ export default function Home() {
           <YieldCalculator />
         </section>
 
+        <RecentlyViewedRail properties={properties} currency={currency} />
+
         <PropertyGrid
-          propertiesCount={properties.length}
+          propertiesCount={visibleProperties.length}
           currentProperties={currentProperties}
           loading={loading}
           currentPage={currentPage}
@@ -70,6 +94,10 @@ export default function Home() {
           onPageChange={handlePageChange}
           currency={currency}
           onViewGallery={setActiveGallery}
+          onToggleFavorite={handleFavoriteToggled}
+          favoritesCount={favorites.length}
+          showFavoritesOnly={showFavoritesOnly}
+          onToggleFavoritesOnly={handleToggleFavoritesOnly}
         />
 
         <ContactCta />

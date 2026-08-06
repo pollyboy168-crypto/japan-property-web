@@ -62,6 +62,10 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - **`lib/supabase.js`**：`getSupabaseClient()` 唯一定義處，`lib/properties.js` 與 `lib/blog.js` 都從這裡 import。
 - **`lib/properties.js`**：Supabase 物件資料存取與正規化的唯一入口——`normalizeProperty(rawItem, index)`（售價 +30%、圖片解析與 fallback、描述 fallback、LINE 深層連結，這些轉換規則全部在這裡）、`getAllProperties()`、`getPropertyById(id)`。首頁（client-side `useEffect`）與物件詳情頁／`sitemap.js`（server-side, edge runtime）都呼叫這幾個函式，是同一套邏輯，改資料轉換規則只需要改這一個檔案。
 - **`lib/blog.js`**（2026-08-06 Phase 2 新增）：部落格資料存取——`getPublishedPosts()`、`getPostBySlug(slug)`（多加 `status='published'` 條件，即使猜到草稿 slug 也查不到，是 RLS 之外的第二層防護）、`createDraftPost(...)`（寫死 `status:'draft'`，不接受呼叫端覆寫）。
+- **`lib/properties.js` 的 `getSimilarProperties(currentProperty, limit=4)`**（2026-08-06 Phase 3 新增）：直接重用 `getAllProperties()`（資料量小，不新增 Supabase 查詢），依「同地區」「價格接近」「ROI 接近」加權排序，供物件詳情頁的「你可能也喜歡」區塊使用。
+- **`lib/clientStorage.js`**（2026-08-06 Phase 3 新增）：純瀏覽器端 `localStorage` 工具，只在 `'use client'` 元件裡使用。兩個獨立命名空間，都是**訪客個人紀錄，不是集體統計，也不會送到任何伺服器**：`kazuhi_recently_viewed`（`getRecentlyViewed()`／`recordView(id)`，存 `[{id, viewedAt}]`，上限 12 筆，只存 id+時間戳，不快取物件標題/價格，顯示時一律拿目前已載入的資料交叉比對，避免顯示過期資訊）、`kazuhi_favorites`（`getFavorites()`／`toggleFavorite(id)`／`isFavorite(id)`，存 id 陣列）。**（設計決策）** 原始需求想要「已有 N 人詢問」這類熱度提示，但網站目前沒有真實的訪客行為統計（Phase 4 才會加），刻意只顯示訪客自己真實看過的物件，不編造集體熱度數字——之後 Phase 4 有真實追蹤資料後才考慮疊加。
+- **`components/FavoriteButton.jsx`**：自己管理收藏狀態（讀寫 `lib/clientStorage.js`），掛載後才讀 localStorage（避免 SSR hydration 不一致）。接受可選的 `onToggle(id, next)` callback——首頁用這個 callback 讓 `app/page.jsx` 知道收藏清單變動了，才能讓「只看收藏」篩選即時反映，`FavoriteButton` 本身不需要外部傳入目前是否收藏的 state。
+- **`components/RecentlyViewedRail.jsx`**（首頁專用）／**`components/TrackPropertyView.jsx`**（詳情頁專用，不渲染畫面，掛載時記錄一次瀏覽）／**`components/SimilarProperties.jsx`**（詳情頁專用，server-safe，刻意不重用完整的 `PropertyCard`，只需要圖片＋標題＋價格＋連結，重用整個 `PropertyCard` 反而要多接 Lightbox／收藏一堆不需要的 state）。
 - **`app/properties/[id]/page.jsx`**（2026-08-06 新增）：每個物件的獨立詳情頁，Server Component，`export const runtime = 'edge'` **加 `export const dynamic = 'force-dynamic'`**（Cloudflare Pages 的 `@cloudflare/next-on-pages` 要求動態路由必須用 edge runtime，且**目前不支援 ISR**；`force-dynamic` 則是為了避開 Next.js 預設會快取 Server Component 內 `fetch()` 結果的行為——見下方「踩過的坑」第 5 點，這行少了會讀到舊資料）。有 `generateMetadata()` 動態產生 OG／Twitter Card，並在頁面內輸出 `RealEstateListing` JSON-LD。查無資料會呼叫 `notFound()`。首頁每張物件卡有「查看完整介紹 →」連結導向這裡。
 - **`app/blog/page.jsx`／`app/blog/[slug]/page.jsx`**（2026-08-06 Phase 2 新增）：部落格列表頁與內文頁，架構完全比照物件詳情頁——`runtime = 'edge'` + `dynamic = 'force-dynamic'`、`generateMetadata()`、`BlogPosting` JSON-LD、查無資料或未發布 `notFound()`。內文 `content` 欄位用 `\n\n` 切段落渲染成 `<p>`，沒有用 markdown 套件也沒有用 `dangerouslySetInnerHTML`。
 - **`app/sitemap.js`／`app/robots.js`**（2026-08-06 新增）：同樣是 `runtime = 'edge'` + `dynamic = 'force-dynamic'`，`sitemap.js` 會即時查 Supabase 把所有物件的 `/properties/[id]` 與已發布文章的 `/blog/[slug]` 網址一起納入。
@@ -112,7 +116,7 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - ✅ **Phase 0（2026-08-06）**：金鑰環境變數化、安全標頭、移除重複頁首、LINE 按鈕精簡、`npm audit` 排查。
 - ✅ **Phase 1（2026-08-06）**：`page.jsx` 拆元件、`lib/properties.js` 共用資料層、`/properties/[id]` 物件獨立詳情頁（SSR + `RealEstateListing` JSON-LD + 動態 OG）、全站 `Organization` JSON-LD、`sitemap.js`／`robots.js`。首頁列表本身仍是 client-only（見上方「首頁資料流程」），但每筆物件已經有可被索引的獨立網址。
 - ✅ **Phase 2（2026-08-06）**：`blog_posts` 資料表＋RLS、`lib/blog.js`、`/blog` 列表頁與 `/blog/[slug]` 內文頁（`BlogPosting` JSON-LD＋動態 OG）、`sitemap.js` 納入文章網址、`scripts/create-blog-draft.mjs` 草稿寫入腳本、發布流程見上方「部落格發布流程」一節。第一篇文章已上線驗證整條鏈路可行。
-- ⬜ **Phase 3**：瀏覽紀錄／熱度提示、物件詳情頁「相似物件」推薦、收藏清單。
+- ✅ **Phase 3（2026-08-06）**：`lib/clientStorage.js`（localStorage 訪客個人紀錄）、首頁「你看過的物件」／「只看收藏」、物件詳情頁收藏按鈕與「你可能也喜歡」相似物件推薦。細節見上方「架構重點」對應條目。
 - ⬜ **Phase 4**：留名單表單（寫入 Supabase `leads` 表）、GA4 訪客追蹤、業務端通知。
 - ⬜ **Phase 5**：n8n 物件資料抓取管線修復——常有抓不到照片／說明的情況，初步判斷是來源網站 JS 動態載入圖片或防盜連保護所致，尚待實際檢視 workflow 才能精準修復。
 

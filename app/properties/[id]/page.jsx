@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getPropertyById } from '@/lib/properties';
+import { getPropertyById, getSimilarProperties } from '@/lib/properties';
 import { formatPropertyPrice, companyInfo } from '@/lib/constants';
+import TrackPropertyView from '@/components/TrackPropertyView';
+import FavoriteButton from '@/components/FavoriteButton';
+import SimilarProperties from '@/components/SimilarProperties';
 
 // Cloudflare Pages (@cloudflare/next-on-pages) 只支援 edge runtime 的動態路由，
 // 且目前不支援 ISR，因此這裡改用「每次請求都重新向 Supabase 抓取」確保資料永遠最新。
@@ -51,6 +54,8 @@ export default async function PropertyDetailPage({ params }) {
     notFound();
   }
 
+  const similarProperties = await getSimilarProperties(property, 4);
+
   const url = `${SITE_URL}/properties/${encodeURIComponent(property.id)}`;
 
   const jsonLd = {
@@ -79,6 +84,7 @@ export default async function PropertyDetailPage({ params }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      <TrackPropertyView propertyId={property.id} />
 
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -128,7 +134,13 @@ export default async function PropertyDetailPage({ params }) {
               ))}
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{property.title}</h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">{property.title}</h1>
+              <FavoriteButton
+                propertyId={property.id}
+                className="shrink-0 w-10 h-10 rounded-full border border-slate-200 bg-white text-xl shadow-sm"
+              />
+            </div>
             <p className="text-sm text-slate-500">📍 {property.location} ‧ {property.structure}</p>
 
             <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{property.description}</p>
@@ -155,6 +167,8 @@ export default async function PropertyDetailPage({ params }) {
             </a>
           </div>
         </div>
+
+        <SimilarProperties items={similarProperties} />
       </main>
 
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-8 text-xs text-center">
