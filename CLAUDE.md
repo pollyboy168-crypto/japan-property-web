@@ -27,7 +27,8 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 **標準修改流程**：
 1. 對網站做任何調整或修改後，使用 git CLI 指令 `add` → `commit` → `push` 到 GitHub（`main` 分支）。
 2. push 到 GitHub 後，Cloudflare 這邊已設定好自動觸發部署，會自動建置並上線，不需要額外手動觸發。
-3. 待 Cloudflare 自動部署完成後，可到正式站網址 **https://japan.her-yow.com/**（自訂網域，對應 Cloudflare Pages 專案 `japan-property-web`，預設網域為 `japan-property-web.pages.dev`）確認畫面內容是否已經是最新版本。
+3. 待 Cloudflare 自動部署完成（可用 `curl` 輪詢正式站，檢查新內容的關鍵字/元素是否已出現）後，確認畫面內容已經是最新版本。
+4. 確認部署完成後，**自動用電腦的預設瀏覽器**開啟正式站網址 **https://japan.her-yow.com/** 讓使用者親眼確認（Windows 環境用 `start https://japan.her-yow.com/`；這是開啟系統瀏覽器，不是 Claude Code 內建的 Browser pane）。
 
 ## 架構重點
 
