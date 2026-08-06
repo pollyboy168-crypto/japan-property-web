@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { companyInfo, OFFICIAL_LINE_URL } from '@/lib/constants';
 
 export default function SiteHeader({ propertiesCount, currency, setCurrency }) {
@@ -21,6 +22,7 @@ export default function SiteHeader({ propertiesCount, currency, setCurrency }) {
           <a href="#calculator" className="hover:text-blue-600 transition">投資試算</a>
           <a href="#flagship" className="hover:text-blue-600 transition">旗艦民宿 (Shinsai Wings)</a>
           <a href="#properties" className="hover:text-blue-600 transition">精選物件 ({propertiesCount})</a>
+          <Link href="/blog" className="hover:text-blue-600 transition">日本房產新訊</Link>
         </nav>
 
         <div className="flex items-center gap-3">

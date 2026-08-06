@@ -5,7 +5,10 @@ import { formatPropertyPrice, companyInfo } from '@/lib/constants';
 
 // Cloudflare Pages (@cloudflare/next-on-pages) 只支援 edge runtime 的動態路由，
 // 且目前不支援 ISR，因此這裡改用「每次請求都重新向 Supabase 抓取」確保資料永遠最新。
+// force-dynamic 是必要的：Next.js 預設會把 Server Component 裡的 fetch()
+// 結果快取起來（連 supabase-js 底層的 fetch 也一樣），沒有這行會讀到舊資料。
 export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
 const SITE_URL = 'https://japan.her-yow.com';
 

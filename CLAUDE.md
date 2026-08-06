@@ -34,14 +34,27 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 
 - **`app/page.jsx`**（2026-08-06 Phase 1 拆分後）現在只是組合元件的進入點——資料/分頁/貨幣/相簿 state 留在這裡，實際渲染委派給 `components/` 下的 `SiteHeader`、`HeroBanner`、`WhyOsaka`、`PropertyGrid`（內含 `PropertyCard`）、`ContactCta`、`GalleryModal`、`SiteFooter`、`LineFab`。要改某個區塊的畫面，先去對應的元件檔案找，不要假設全部邏輯還在 `page.jsx` 裡。`components/YieldCalculator.jsx` 維持獨立掛載在 `<section id="calculator">`，未被納入這次拆分（本來就是獨立元件）。
 - **`lib/constants.js`**：`OFFICIAL_LINE_ID`／`OFFICIAL_LINE_URL`／`companyInfo`／`BACKUP_IMAGES`／`formatPropertyPrice()` 等全站共用常數與工具函式，首頁與物件詳情頁共用同一份，不要各自寫一份。
-- **`lib/properties.js`**：Supabase 存取與資料正規化的唯一入口——`getSupabaseClient()`、`normalizeProperty(rawItem, index)`（售價 +30%、圖片解析與 fallback、描述 fallback、LINE 深層連結，這些轉換規則全部在這裡）、`getAllProperties()`、`getPropertyById(id)`。首頁（client-side `useEffect`）與物件詳情頁／`sitemap.js`（server-side, edge runtime）都呼叫這幾個函式，是同一套邏輯，改資料轉換規則只需要改這一個檔案。
-- **`app/properties/[id]/page.jsx`**（2026-08-06 新增）：每個物件的獨立詳情頁，Server Component，`export const runtime = 'edge'`（Cloudflare Pages 的 `@cloudflare/next-on-pages` 要求動態路由必須用 edge runtime，且**目前不支援 ISR**，所以這裡是「每次請求都重新查 Supabase」，不做 `generateStaticParams` 預先靜態化，確保資料即時）。有 `generateMetadata()` 動態產生 OG／Twitter Card，並在頁面內輸出 `RealEstateListing` JSON-LD。查無資料會呼叫 `notFound()`。首頁每張物件卡有「查看完整介紹 →」連結導向這裡。
-- **`app/sitemap.js`／`app/robots.js`**（2026-08-06 新增）：同樣是 `runtime = 'edge'`，`sitemap.js` 會即時查 Supabase 把所有物件的 `/properties/[id]` 網址一起納入。
+- **`lib/supabase.js`**：`getSupabaseClient()` 唯一定義處，`lib/properties.js` 與 `lib/blog.js` 都從這裡 import。
+- **`lib/properties.js`**：Supabase 物件資料存取與正規化的唯一入口——`normalizeProperty(rawItem, index)`（售價 +30%、圖片解析與 fallback、描述 fallback、LINE 深層連結，這些轉換規則全部在這裡）、`getAllProperties()`、`getPropertyById(id)`。首頁（client-side `useEffect`）與物件詳情頁／`sitemap.js`（server-side, edge runtime）都呼叫這幾個函式，是同一套邏輯，改資料轉換規則只需要改這一個檔案。
+- **`lib/blog.js`**（2026-08-06 Phase 2 新增）：部落格資料存取——`getPublishedPosts()`、`getPostBySlug(slug)`（多加 `status='published'` 條件，即使猜到草稿 slug 也查不到，是 RLS 之外的第二層防護）、`createDraftPost(...)`（寫死 `status:'draft'`，不接受呼叫端覆寫）。
+- **`app/properties/[id]/page.jsx`**（2026-08-06 新增）：每個物件的獨立詳情頁，Server Component，`export const runtime = 'edge'` **加 `export const dynamic = 'force-dynamic'`**（Cloudflare Pages 的 `@cloudflare/next-on-pages` 要求動態路由必須用 edge runtime，且**目前不支援 ISR**；`force-dynamic` 則是為了避開 Next.js 預設會快取 Server Component 內 `fetch()` 結果的行為——見下方「踩過的坑」第 5 點，這行少了會讀到舊資料）。有 `generateMetadata()` 動態產生 OG／Twitter Card，並在頁面內輸出 `RealEstateListing` JSON-LD。查無資料會呼叫 `notFound()`。首頁每張物件卡有「查看完整介紹 →」連結導向這裡。
+- **`app/blog/page.jsx`／`app/blog/[slug]/page.jsx`**（2026-08-06 Phase 2 新增）：部落格列表頁與內文頁，架構完全比照物件詳情頁——`runtime = 'edge'` + `dynamic = 'force-dynamic'`、`generateMetadata()`、`BlogPosting` JSON-LD、查無資料或未發布 `notFound()`。內文 `content` 欄位用 `\n\n` 切段落渲染成 `<p>`，沒有用 markdown 套件也沒有用 `dangerouslySetInnerHTML`。
+- **`app/sitemap.js`／`app/robots.js`**（2026-08-06 新增）：同樣是 `runtime = 'edge'` + `dynamic = 'force-dynamic'`，`sitemap.js` 會即時查 Supabase 把所有物件的 `/properties/[id]` 與已發布文章的 `/blog/[slug]` 網址一起納入。
 - **`app/layout.jsx`** 只負責 `<html>`/`<body>` 外殼＋全站 `Organization` JSON-LD（2026-08-06 新增），不再自己渲染頁首。（歷史註記：這裡曾經重複渲染過一個內容不同的第二個頁首，導致全站疊出兩個頁首，已於 2026-08-06 移除。）
 - **首頁資料流程**：`app/page.jsx` 掛載後透過 `useEffect` 呼叫 `lib/properties.js` 的 `getAllProperties()`（瀏覽器端用 anon key 查詢 Supabase `properties` 資料表）。因為是前端非同步載入，剛渲染完成時畫面短暫顯示「共 0 筆」是正常現象，並非網站故障。**這是首頁本身的已知限制**：首頁列表仍是 client-only，Google 看不到列表內容；但 Phase 1 已經讓「每一筆物件」都有自己的、伺服器端渲染、可被索引的 `/properties/[id]` 網址與 Schema.org 資料，SEO 地基已補上（見下方「已知架構缺口與後續規劃」）。
 - 分頁邏輯完全在前端進行（`itemsPerPage = 12`），是直接對已抓取到的 `properties` 陣列做切片，並沒有依頁碼向 Supabase 做伺服器端分頁查詢（初始抓取就已經透過 `.range(0, 999)` 一次撈到最多 1000 筆）。
 - 幣別切換（日圓／台幣）只是前端用固定匯率相乘（`jpyToTwd = 0.21`，在 `lib/constants.js`），並非即時匯率。
 - **LINE 詢問入口（2026-08-06 精簡後）**：全站只保留三種強度的 LINE CTA，避免滿版綠色按鈕造成視覺疲勞——① 頁首導覽列一顆常駐按鈕；② 每張物件卡是「📷 看實景照片」＋一顆小型 icon-only 外框按鈕（`border-emerald-500`，不是實心填色）；③ 全站唯一的固定浮動按鈕（`LineFab.jsx`，`fixed bottom-5 right-5`），滾動到任何位置都能一鍵詢問。頁尾「專人諮詢」區塊、相簿彈窗、物件詳情頁各自的按鈕視為單一情境下的自然收尾 CTA，不算在「精簡」範圍內。新增任何 LINE 相關按鈕前，先確認是否已經有上述入口可以涵蓋，避免又疊加出一整片綠色。
+
+## 部落格發布流程（2026-08-06 Phase 2）
+
+網站沒有後台管理介面，發布機制是刻意設計成「anon key 只能新增草稿，人工審核後手動發布」：
+
+- **資料表 `blog_posts`**：欄位 `slug`(PK) / `title` / `excerpt` / `content` / `cover_image` / `status`(`draft`｜`published`) / `published_at` / `created_at`。RLS 只有兩條 policy：公開只能 `select` `status='published'` 的資料列；anon key 只能 `insert` 且 `with check (status = 'draft')`。**沒有 UPDATE／DELETE policy**，代表 anon key 完全無法把草稿改成 published、也無法改內容或刪除——這一步只能由使用者在 Supabase Dashboard 的 Table Editor 手動操作。
+- **寫入草稿**：`node --env-file=.env.local scripts/create-blog-draft.mjs scripts/drafts/<檔名>.json`，draft JSON 格式見 `scripts/create-blog-draft.mjs` 檔頭註解。這支腳本刻意不 import `lib/blog.js`（本專案 `package.json` 沒有設 `"type": "module"`，`next.config.js` 等設定檔還是 CommonJS，不能改動這個設定；純 Node 直接執行 `.js` 會把 `lib/` 裡的 ESM `export` 語法解析失敗），所以腳本內自己用 `@supabase/supabase-js` 補了一份等價的最小邏輯。
+- **寫入時注意**：insert 之後**不要**再串 `.select()` 把剛寫入的資料讀回來——SELECT policy 只允許讀 `status='published'` 的資料，讀不到剛寫入的 draft 會被 Supabase 回報成 RLS 違規，其實 insert 本身是成功的。已知的資料就直接用來 log／回傳，不要再問資料庫要一次。
+- **發布**：使用者到 Supabase Table Editor 把該筆 `status` 手動改成 `published`，可順便填 `published_at`（留空的話，`/blog` 列表與文章頁不會顯示日期，也不影響排序/顯示邏輯，但建議之後補上比較完整）。
+- 目前有一篇已發布：`/blog/osaka-tokku-minpaku-2026-shinsei-shuryo`（大阪特區民泊新規受理截止），是驗證整條「Claude 寫草稿 → 使用者審核 → 手動發布」鏈路用的第一篇真實文章，主題來自升級藍圖研究時查到、對現有網站「特區民泊 365 天」行銷文案有實質影響的時事。
 
 ## 環境變數
 
@@ -64,6 +77,7 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 2. **`wrangler.toml` 的 `compatibility_date` 太舊**：原本是 `2024-03-01`，但 `nodejs_compat` 旗標的行為是綁 `compatibility_date` 的，Cloudflare／`next-on-pages` 文件要求至少 `2024-09-23`。日期太舊會導致「任何需要在請求當下執行的 edge function」回應通用的 `Internal Server Error`（連完全不呼叫 Supabase 的純靜態 `robots.js` 都會噴），但已經預先建置好的靜態頁面（像首頁）不受影響——這個症狀組合是辨識這個問題的關鍵線索。已改成 `2024-09-23`。
 3. 這個專案因為長期都是全靜態頁面，`wrangler.toml` 的 `compatibility_date` 一直沒人注意到已經過舊；**之後如果又要新增任何 server-rendered／edge route，先確認這個日期跟 `@cloudflare/next-on-pages` 版本是不是又落後了**，不要假設現有設定永遠適用。
 4. Cloudflare Pages Functions（透過 `next-on-pages` 產生）目前在這個帳戶的 Dashboard 上沒有 Observability／即時 log 可看（試過 Functions 分頁、Observability Events、Metrics，都是空的），排查 500 錯誤時沒辦法從 Dashboard 直接拿到 stack trace，只能靠通用症狀比對／查官方 issue，或改用 `wrangler pages deployment tail`（純讀取、不會動用戶端資料，需要另外跟使用者確認是否要用，因為專案規範原則上避免呼叫 wrangler）。
+5. **（2026-08-06 Phase 2 發現）Next.js 會把 Server Component 裡的 `fetch()` 結果快取到 `.next/cache/fetch-cache`，連 `supabase-js` 底層發出的 fetch 也一樣，而且會跨開發伺服器重啟持續存在**。實際症狀：Supabase 資料表內容明明已經更新（例如把文章 `status` 改成 `published`），但 `/blog`、`/properties/[id]` 這類頁面重新整理甚至重開 `npm run dev` 都還是顯示舊資料。加了 `export const dynamic = 'force-dynamic'` 才會強制每次請求都重新查詢，不吃快取——**任何新增的、會查 Supabase 的 server-rendered 路由，`runtime = 'edge'` 之外一定要記得也加這一行**，不要假設 edge runtime 本身就代表資料一定即時。
 
 ## 已知架構缺口與後續規劃
 
@@ -71,7 +85,7 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 
 - ✅ **Phase 0（2026-08-06）**：金鑰環境變數化、安全標頭、移除重複頁首、LINE 按鈕精簡、`npm audit` 排查。
 - ✅ **Phase 1（2026-08-06）**：`page.jsx` 拆元件、`lib/properties.js` 共用資料層、`/properties/[id]` 物件獨立詳情頁（SSR + `RealEstateListing` JSON-LD + 動態 OG）、全站 `Organization` JSON-LD、`sitemap.js`／`robots.js`。首頁列表本身仍是 client-only（見上方「首頁資料流程」），但每筆物件已經有可被索引的獨立網址。
-- ⬜ **Phase 2**：部落格／新聞系統，定期發佈日本房產資訊做內容行銷引流。
+- ✅ **Phase 2（2026-08-06）**：`blog_posts` 資料表＋RLS、`lib/blog.js`、`/blog` 列表頁與 `/blog/[slug]` 內文頁（`BlogPosting` JSON-LD＋動態 OG）、`sitemap.js` 納入文章網址、`scripts/create-blog-draft.mjs` 草稿寫入腳本、發布流程見上方「部落格發布流程」一節。第一篇文章已上線驗證整條鏈路可行。
 - ⬜ **Phase 3**：瀏覽紀錄／熱度提示、物件詳情頁「相似物件」推薦、收藏清單。
 - ⬜ **Phase 4**：留名單表單（寫入 Supabase `leads` 表）、GA4 訪客追蹤、業務端通知。
 - ⬜ **Phase 5**：n8n 物件資料抓取管線修復——常有抓不到照片／說明的情況，初步判斷是來源網站 JS 動態載入圖片或防盜連保護所致，尚待實際檢視 workflow 才能精準修復。
