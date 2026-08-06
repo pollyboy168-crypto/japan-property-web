@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import YieldCalculator from '@/components/YieldCalculator';
 
 // ----------------------------------------------------------------
 // 🏢 1. 日本法人與官方 LINE 帳號設定
@@ -285,6 +286,11 @@ export default function Home() {
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">連同土地一併買下，世襲制無使用年限，作為代代相傳的堅實資產。</p>
             </div>
           </div>
+        </section>
+
+        {/* 投資報酬率試算器 */}
+        <section id="calculator" className="scroll-mt-20">
+          <YieldCalculator />
         </section>
 
         {/* 3. 精選與全網即時投資物件 (雙重頂底分頁控制列) */}
