@@ -40,7 +40,9 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 
 這跟 Claude Code 內建、專門拿來測試 `localhost` 與正式站畫面的 Browser pane（`mcp__Claude_Browser__*`）是兩個不同的工具——Browser pane 沒有使用者的登入狀態，Claude in Chrome 操作的是使用者真實、已登入的 Chrome。
 
-**首次使用注意**：使用者的帳號目前連了多個 Chrome 瀏覽器實例，呼叫 `tabs_context_mcp` 若回報「Multiple Chrome browsers are connected」，必須依照錯誤訊息指示，用 `AskUserQuestion` 列出每一個已連線瀏覽器（含 deviceId）加上「讓使用者自己在 Chrome 裡點 Connect 選」這個選項，等使用者選定後才能繼續操作，不要自己擅自選一個。
+**使用者已明確授權自主操作**：不需要每次要用瀏覽器前都先問過使用者才動作——需要時直接呼叫 `tabs_create_mcp` 開一個新分頁自己操作即可，操作完自行 `tabs_close_mcp` 收乾淨，不用因為「要不要用瀏覽器」這件事本身停下來問。
+
+**多瀏覽器選擇是工具本身的硬性規定，不是可以省略的一步**：使用者的帳號連了多個 Chrome 瀏覽器實例，呼叫 `tabs_context_mcp` 若回報「Multiple Chrome browsers are connected」，必須依照錯誤訊息指示，用 `AskUserQuestion` 列出每一個已連線瀏覽器（含 deviceId）加上「讓使用者自己在 Chrome 裡點 Connect 選」這個選項，等使用者選定後才能繼續，不要自己擅自選一個——這是單一工作階段（session）內第一次用到瀏覽器時才會遇到，選定後同一個 session 之後就可以直接開新分頁操作，不用重複問。
 
 涉及帳號設定變更、刪除資料等有風險的操作，仍然要依照一般安全準則先跟使用者確認，不因為改用 Claude in Chrome 操作就自動視為已授權。
 
