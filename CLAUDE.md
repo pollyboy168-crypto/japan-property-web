@@ -99,12 +99,27 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - **GA4**：Measurement ID `G-5T1TG1MG5D`，帳戶／資源名稱都叫「株式会社和日」／「日本地產與民宿投資專家」，2026-08-06 由 Claude 透過 Claude in Chrome 在使用者的 Google 帳號（`pollyboy168@gmail.com`）建立。
 - **Resend（Email 通知）**：帳號用同一個 Google 帳號登入（`pollyboy168@gmail.com`），API key 存在 `RESEND_API_KEY`。**目前還沒驗證自訂寄件網域**，寄件位址固定是 Resend 的預設測試網域 `onboarding@resend.dev`，收件位址也只能是申請帳號當下那個 Google 帳號的信箱（剛好就是 `pollyboy168@gmail.com`，是使用者自己的信箱，堪用）。之後如果要換成 `xxx@her-yow.com` 這種自訂寄件位址，需要到 Resend 的 Domains 頁面驗證網域（可能要加 DNS 記錄，`her-yow.com` 的 DNS 大概率也在 Cloudflare 上管理）。
 
+## 物件資料同步流程（2026-08-06/07 Phase 5：n8n 假資料管線修復）
+
+**背景**：原本 n8n workflow「01_大阪房產物件LINE連結生成測試」對 10 個來源網站的「列表頁」做純 regex 抓取，抓不到真實資料就用假圖（3 張固定 Unsplash 圖輪流用）／罐頭文案（「〇〇府〇〇市内の厳選収益物件」）硬湊出固定 20 筆，導致 `properties` 表幾乎全是假資料，即使 `source_name` 標成「健美家」，圖片跟文案也完全跟該筆物件無關。實測過這 10 個來源：只有 1 個（LIFULL HOMES）能直接 200，但物件類別不對（一般中古住宅，不是收益物件）；其餘 9 個是 301 導到錯誤頁／404／連線失敗／403，詳細清單已不需保留（架構已整個換掉，不用照舊來源修）。使用者明確指示「務必修好，必要時可以不用 n8n」，並選擇「只修真正能穩定拿到真實資料的少數來源」而非硬修全部 10 個。
+
+**新架構**：唯一保留的來源是**健美家（Kenbiya）**——同時符合「大阪」「收益物件」「靜態 HTML 就含真實圖片與完整文案，不需要 JS 渲染」三個條件、且未被反爬蟲擋下的來源。列表頁 `https://www.kenbiya.com/pp3/k/osaka/{city}/{page}/` 每頁約 19 筆真實物件連結，詳情頁 `https://www.kenbiya.com/pp3/k/osaka/{city}/{page}/re_{id}/` 含真實標題（`<h1>`）、價格（`<dt>価格</dt>` 後面的 `億`／`万円` 組合）、利回り（`rimawari_value` span）、住所（`<dt>住所</dt>`）、1-2 張真實照片（`/upload/p{xxx}/{id}/*.jpg`）、仲介公司撰寫的完整介紹文（`備考` 區塊＋`box_comment` 區塊）。
+
+**關鍵技術限制（踩過的坑）**：實測發現 **Cloudflare Workers 的對外 IP 會被健美家的 F5 WAF 反爬蟲擋下**——`app/api/sync-properties/route.js` 一開始的版本直接在這支 edge API 裡對健美家發 `fetch()`，結果每次都收到空回應（`?debug=1` 診斷模式顯示 `htmlLength: 0`），但同一組 URL 用 **n8n Cloud 的 HTTP Request／Code 節點**發請求完全正常（拿到 202KB 真實 HTML）。因此最終架構把「抓取＋解析 HTML」全部放在 n8n 端執行，這支 API 只負責「接收 n8n 送來的 JSON、驗證、寫入 Supabase」，完全不對健美家發任何請求，繞開了這個反爬蟲限制。**之後如果又想把抓取邏輯搬回 Cloudflare edge route，要先假設一樣會被擋，先用 `?debug=1` 這類方式驗證，不要直接假設能通。**
+
+- **`app/api/sync-properties/route.js`**（edge runtime）：`POST` 帶 `Authorization: Bearer ${SYNC_SECRET}` header 與 `{records: [...]}` JSON body。驗證每筆 record 有 `id`／`title_zh`／`price_jpy`（>0）／`images`（非空陣列）才收，不合格的直接跳過而不是硬塞假值；合格的用 anon key 呼叫 Supabase REST API `upsert`（`Prefer: resolution=merge-duplicates`）寫入 `properties` 表。**這支 API 本身不會被排程觸發，也不知道健美家是什麼，純粹是「被叫了就驗證+寫入」，抓取邏輯完全不在這裡。**
+- **n8n workflow「01_大阪房產物件LINE連結生成測試」**（`https://jackystwu.app.n8n.cloud/workflow/TsyPpjdTx4eTi6z5`）：整個重建成 3 個節點——`Schedule Trigger`（沿用原本的每日排程）→ `Code in JavaScript`（一個節點做完全部：抓 3 個 Kenbiya 城市列表頁取得詳情頁連結、逐一抓詳情頁、regex 解析出 `id`／`title_zh`／`price_jpy`／`price_twd`／`location`／`roi`／`type`／`image_url`／`images`／`original_url`／`description_zh`，缺標題／價格／照片的直接跳過不硬湊；內建 429 重試（等 8 秒重試，最多 3 次）與節流（每個請求間隔 1.5 秒，避免觸發健美家的 rate limit）；用 `this.helpers.httpRequest.bind(this.helpers)` 發請求，這是 n8n Code 節點內建、不需要額外套件就能用的 HTTP 工具）→ `HTTP Request`（`POST` 到 `https://japan.her-yow.com/api/sync-properties`，header 帶 `Authorization: Bearer <SYNC_SECRET>`，body 用 JSON 欄位模式帶 `records` = expression `{{ $json.records }}`）。舊的 `Loop Over Items`／`Wait`／假資料生成 `Code` 節點／舊的 Supabase upsert 節點全部刪除。**修改 n8n workflow 後記得要按「Publish」，不是自動存檔的。**
+- **`SYNC_SECRET` 環境變數**：隨機產生的長字串，本機 `.env.local` 與 Cloudflare Pages 專案設定（Production）都要有，且要跟 n8n HTTP Request 節點的 `Authorization` header 值一致。單純用來防止陌生人對外呼叫這支同步 API 亂寫資料，不是給使用者登入用的。
+- **抓取範圍**：目前鎖定大阪市（`osaka-shi`）前兩頁＋堺市（`sakai-shi`）第一頁，最多 24 筆詳情頁，足以驗證整條真實資料管線可行，之後如果要擴大涵蓋範圍（更多城市／更多頁）只要改 `Code in JavaScript` 節點裡的 `LISTING_PAGES` 陣列與 `MAX_LISTINGS`，同時要留意 Cloudflare／n8n 的 subrequest 上限與健美家的 rate limit（實測連續高頻測試會觸發 429，且封鎖時間不算短，測試時務必節流、不要短時間內重複執行整個 workflow）。
+- **⚠️ 待處理**：資料庫裡舊的假資料（`id` 格式 `PROP-{n}-{nnn}`，約 413 筆）跟新的真實資料（`id` 格式 `KENBIYA-{listingId}`）不會撞號，代表兩者會並存顯示在網站上，除非額外清理。是否要清掉舊的假資料、怎麼清（全部刪除？只留没有對應真實資料的？），是破壞性操作，**還沒問過使用者，不要主動執行 DELETE**。
+
 ## 環境變數
 
 - `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`：Supabase 專案的 URL 與 **anon public key**（設計上就是要曝露在瀏覽器端的公開金鑰，真正的存取控制要靠 Supabase 的 Row Level Security，不是靠隱藏這把金鑰）。
 - `NEXT_PUBLIC_GA_MEASUREMENT_ID`（2026-08-06 Phase 4 新增）：GA4 Measurement ID，本身不是敏感資訊，公開曝露在瀏覽器本來就是 GA4 的設計。
 - `RESEND_API_KEY`（2026-08-06 Phase 4 新增）：**伺服器端專用，沒有 `NEXT_PUBLIC_` 前綴，絕對不能出現在會被瀏覽器讀到的地方**。只有 `app/api/leads/route.js` 這個 edge route 會用到。
 - `LEAD_NOTIFICATION_EMAIL`（2026-08-06 Phase 4 新增）：留名單通知信要寄到哪個信箱，同樣是伺服器端專用。
+- `SYNC_SECRET`（2026-08-07 Phase 5 新增）：`app/api/sync-properties/route.js` 的呼叫驗證密鑰，伺服器端專用。n8n workflow 的 HTTP Request 節點呼叫這支 API 時要帶一樣的值（`Authorization: Bearer <SYNC_SECRET>`），兩邊改了其中一邊要記得同步改另一邊。
 - 本機開發：複製 `.env.local.example` 為 `.env.local` 並填入實際值（`.env.local` 已加入 `.gitignore`，不會被 commit）。
 - **Cloudflare Pages 正式站**：必須在 Cloudflare Pages 專案設定 → Settings → Environment variables 裡，把上面這幾個變數加到 Production（建議 Preview 也一併加）。這是 2026-08-06 資安強化時把金鑰從原始碼移出後才需要的步驟——**若忘記在 Cloudflare 專案設定同步的話，正式站會抓不到任何物件資料，或是 GA4／留名單功能不會動作**。
 - 程式碼裡不應該再出現任何寫死的金鑰或 fallback 值；若環境變數未設定，`supabase` client 會拿到 `undefined`，並在 console 印出明確錯誤，方便排查而不是靜默使用一把過期的金鑰。
@@ -137,7 +152,7 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - ✅ **Phase 2（2026-08-06）**：`blog_posts` 資料表＋RLS、`lib/blog.js`、`/blog` 列表頁與 `/blog/[slug]` 內文頁（`BlogPosting` JSON-LD＋動態 OG）、`sitemap.js` 納入文章網址、`scripts/create-blog-draft.mjs` 草稿寫入腳本、發布流程見上方「部落格發布流程」一節。第一篇文章已上線驗證整條鏈路可行。
 - ✅ **Phase 3（2026-08-06）**：`lib/clientStorage.js`（localStorage 訪客個人紀錄）、首頁「你看過的物件」／「只看收藏」、物件詳情頁收藏按鈕與「你可能也喜歡」相似物件推薦。細節見上方「架構重點」對應條目。
 - ✅ **Phase 4（2026-08-06）**：`leads` 資料表＋RLS、`app/api/leads/route.js`、`LeadFormModal.jsx`（首頁浮動按鈕＋物件詳情頁）、GA4（`GoogleAnalytics.jsx` + 三個自訂事件）、Resend Email 通知。細節見上方「留名單與訪客追蹤流程」一節。順帶發現 `properties` 表 RLS 未啟用，記錄在「資安基本盤」待處理。
-- ⬜ **Phase 5**：n8n 物件資料抓取管線修復——常有抓不到照片／說明的情況，初步判斷是來源網站 JS 動態載入圖片或防盜連保護所致，尚待實際檢視 workflow 才能精準修復。
+- ✅ **Phase 5（2026-08-07）**：n8n 物件資料抓取管線修復——原本是對來源網站列表頁做 regex 抓取、抓不到就假造 20 筆湊數，改成鎖定健美家(Kenbiya)大阪收益物件，抓真實詳情頁的標題／價格／利回り／地址／照片／文案，抓不到就跳過不硬湊。抓取／解析邏輯放在 n8n（因為 Cloudflare Workers 的 IP 會被來源網站的反爬蟲擋下，n8n 的 IP 不會），新增 `app/api/sync-properties/route.js` 只負責驗證＋寫入 Supabase。細節見上方「物件資料同步流程」一節。**待處理**：舊的 413 筆假資料還沒清掉，跟新資料並存顯示中。
 
 每完成一個 Phase 都會回來更新本文件對應章節，不要假設這裡列的「⬜ 尚未開始」永遠正確——實作前先確認一下對應的檔案是否已經存在。
 
