@@ -32,14 +32,16 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 
 ## 架構重點
 
-- **`app/page.jsx`** 幾乎是整個網站的全部內容——一個很大的 `'use client'` 元件，內含頁首、Hero 區塊、賣點介紹、投資報酬率試算器掛載點、物件列表格線、分頁、相簿彈窗 (Lightbox)、頁尾、全站唯一固定 LINE 詢問鈕。目前沒有拆分成子元件，各區塊是用註解（例如 `// 📄 分頁計算邏輯`）當作分界。要修改某個區塊時，建議依註解標題定位，而不要假設有獨立檔案存在。
-- **`app/layout.jsx`** 只負責 `<html>`/`<body>` 外殼，不再自己渲染頁首。（歷史註記：這裡曾經重複渲染過一個內容不同的第二個頁首，導致全站疊出兩個頁首，已於 2026-08-06 移除，頁首現在只有 `page.jsx` 裡那一個。）
-- **`components/YieldCalculator.jsx`** 是收益試算器元件，已掛載在 `page.jsx` 的 `<section id="calculator">`（約第 292 行附近）。（歷史註記：本文件曾誤植為「孤兒元件」，已於 2026-08-06 修正——目前並非孤兒元件，改動試算器邏輯請直接修改這個檔案。）
-- **資料流程（在 `app/page.jsx` 內）**：頁面掛載後透過 `useEffect` 於前端（瀏覽器端）用 `@supabase/supabase-js` 查詢 Supabase 的 `properties` 資料表（使用瀏覽器端 anon key，沒有經過任何 server route）。Supabase URL 與 anon key 一律從環境變數 `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` 讀取（見下方「環境變數」一節），程式碼裡不應再寫死任何金鑰值。原始資料在前端會被轉換：售價自動加價 30%（`price_jpy * 1.3`），圖片欄位可能是 JSON 字串／陣列／單一 URL，若該筆物件完全沒有圖片則會從固定的 `BACKUP_IMAGES` 圖池中挑一張；若資料庫描述欄位是空的或符合某個已知的制式文字，則會自動生成一段中文介紹文案。每筆物件也會產生一組帶有該物件資訊的 LINE 深層連結（`line.me/ti/p/<id>?text=...`），點擊後會預填詢問訊息。
-- 因為物件資料是前端非同步載入，剛渲染完成（或 SSR）時畫面短暫顯示「共 0 筆」是正常現象（資料尚未 hydrate 完成），並非網站故障——這點先前已確認過。這也是目前架構的已知缺點：Google 等搜尋引擎與 LINE／社群分享預覽抓到的是掛載前的空殼頁面，413 筆物件目前無法被搜尋引擎個別索引（見下方「已知架構缺口與後續規劃」）。
+- **`app/page.jsx`**（2026-08-06 Phase 1 拆分後）現在只是組合元件的進入點——資料/分頁/貨幣/相簿 state 留在這裡，實際渲染委派給 `components/` 下的 `SiteHeader`、`HeroBanner`、`WhyOsaka`、`PropertyGrid`（內含 `PropertyCard`）、`ContactCta`、`GalleryModal`、`SiteFooter`、`LineFab`。要改某個區塊的畫面，先去對應的元件檔案找，不要假設全部邏輯還在 `page.jsx` 裡。`components/YieldCalculator.jsx` 維持獨立掛載在 `<section id="calculator">`，未被納入這次拆分（本來就是獨立元件）。
+- **`lib/constants.js`**：`OFFICIAL_LINE_ID`／`OFFICIAL_LINE_URL`／`companyInfo`／`BACKUP_IMAGES`／`formatPropertyPrice()` 等全站共用常數與工具函式，首頁與物件詳情頁共用同一份，不要各自寫一份。
+- **`lib/properties.js`**：Supabase 存取與資料正規化的唯一入口——`getSupabaseClient()`、`normalizeProperty(rawItem, index)`（售價 +30%、圖片解析與 fallback、描述 fallback、LINE 深層連結，這些轉換規則全部在這裡）、`getAllProperties()`、`getPropertyById(id)`。首頁（client-side `useEffect`）與物件詳情頁／`sitemap.js`（server-side, edge runtime）都呼叫這幾個函式，是同一套邏輯，改資料轉換規則只需要改這一個檔案。
+- **`app/properties/[id]/page.jsx`**（2026-08-06 新增）：每個物件的獨立詳情頁，Server Component，`export const runtime = 'edge'`（Cloudflare Pages 的 `@cloudflare/next-on-pages` 要求動態路由必須用 edge runtime，且**目前不支援 ISR**，所以這裡是「每次請求都重新查 Supabase」，不做 `generateStaticParams` 預先靜態化，確保資料即時）。有 `generateMetadata()` 動態產生 OG／Twitter Card，並在頁面內輸出 `RealEstateListing` JSON-LD。查無資料會呼叫 `notFound()`。首頁每張物件卡有「查看完整介紹 →」連結導向這裡。
+- **`app/sitemap.js`／`app/robots.js`**（2026-08-06 新增）：同樣是 `runtime = 'edge'`，`sitemap.js` 會即時查 Supabase 把所有物件的 `/properties/[id]` 網址一起納入。
+- **`app/layout.jsx`** 只負責 `<html>`/`<body>` 外殼＋全站 `Organization` JSON-LD（2026-08-06 新增），不再自己渲染頁首。（歷史註記：這裡曾經重複渲染過一個內容不同的第二個頁首，導致全站疊出兩個頁首，已於 2026-08-06 移除。）
+- **首頁資料流程**：`app/page.jsx` 掛載後透過 `useEffect` 呼叫 `lib/properties.js` 的 `getAllProperties()`（瀏覽器端用 anon key 查詢 Supabase `properties` 資料表）。因為是前端非同步載入，剛渲染完成時畫面短暫顯示「共 0 筆」是正常現象，並非網站故障。**這是首頁本身的已知限制**：首頁列表仍是 client-only，Google 看不到列表內容；但 Phase 1 已經讓「每一筆物件」都有自己的、伺服器端渲染、可被索引的 `/properties/[id]` 網址與 Schema.org 資料，SEO 地基已補上（見下方「已知架構缺口與後續規劃」）。
 - 分頁邏輯完全在前端進行（`itemsPerPage = 12`），是直接對已抓取到的 `properties` 陣列做切片，並沒有依頁碼向 Supabase 做伺服器端分頁查詢（初始抓取就已經透過 `.range(0, 999)` 一次撈到最多 1000 筆）。
-- 幣別切換（日圓／台幣）只是前端用固定匯率相乘（`jpyToTwd = 0.21`），並非即時匯率。
-- **LINE 詢問入口（2026-08-06 精簡後）**：全站只保留三種強度的 LINE CTA，避免滿版綠色按鈕造成視覺疲勞——① 頁首導覽列一顆常駐按鈕；② 每張物件卡是「📷 看實景照片」＋一顆小型 icon-only 外框按鈕（`border-emerald-500`，不是實心填色）；③ 全站唯一的固定浮動按鈕（`fixed bottom-5 right-5`），滾動到任何位置都能一鍵詢問。頁尾「專人諮詢」區塊與相簿彈窗內各自的按鈕視為單一情境下的自然收尾 CTA，不算在「精簡」範圍內。新增任何 LINE 相關按鈕前，先確認是否已經有上述入口可以涵蓋，避免又疊加出一整片綠色。
+- 幣別切換（日圓／台幣）只是前端用固定匯率相乘（`jpyToTwd = 0.21`，在 `lib/constants.js`），並非即時匯率。
+- **LINE 詢問入口（2026-08-06 精簡後）**：全站只保留三種強度的 LINE CTA，避免滿版綠色按鈕造成視覺疲勞——① 頁首導覽列一顆常駐按鈕；② 每張物件卡是「📷 看實景照片」＋一顆小型 icon-only 外框按鈕（`border-emerald-500`，不是實心填色）；③ 全站唯一的固定浮動按鈕（`LineFab.jsx`，`fixed bottom-5 right-5`），滾動到任何位置都能一鍵詢問。頁尾「專人諮詢」區塊、相簿彈窗、物件詳情頁各自的按鈕視為單一情境下的自然收尾 CTA，不算在「精簡」範圍內。新增任何 LINE 相關按鈕前，先確認是否已經有上述入口可以涵蓋，避免又疊加出一整片綠色。
 
 ## 環境變數
 
@@ -56,15 +58,16 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 
 ## 已知架構缺口與後續規劃
 
-網站目前的完整升級藍圖（含競品功能研究、13 項目標對照、分階段計畫）記錄在對話歷史中的研究報告裡，重點缺口摘要：
+網站目前的完整升級藍圖（含競品功能研究、13 項目標對照、分階段計畫）記錄在對話歷史中的研究報告裡。進度：
 
-1. **零 SEO 資料流**——物件資料純前端抓取，Google／LINE 預覽看不到內容，也沒有個別物件的獨立網址與 Schema.org 結構化資料。
-2. **沒有部落格／新聞系統**——尚無法定期發佈房產資訊做內容行銷引流。
-3. **沒有留名單／訪客追蹤機制**——目前所有導客都導向 LINE，站內沒有任何方式留下聯絡方式或行為紀錄。
-4. **沒有瀏覽紀錄／相似物件推薦**——訪客看過的物件不會被記住，物件詳情頁也還不存在（目前只有 Lightbox 相簿彈窗，沒有真正的獨立詳情頁）。
-5. **n8n 物件資料抓取管線**——常有抓不到照片／說明的情況，初步判斷是來源網站 JS 動態載入圖片或防盜連保護所致，尚待實際檢視 workflow 才能精準修復。
+- ✅ **Phase 0（2026-08-06）**：金鑰環境變數化、安全標頭、移除重複頁首、LINE 按鈕精簡、`npm audit` 排查。
+- ✅ **Phase 1（2026-08-06）**：`page.jsx` 拆元件、`lib/properties.js` 共用資料層、`/properties/[id]` 物件獨立詳情頁（SSR + `RealEstateListing` JSON-LD + 動態 OG）、全站 `Organization` JSON-LD、`sitemap.js`／`robots.js`。首頁列表本身仍是 client-only（見上方「首頁資料流程」），但每筆物件已經有可被索引的獨立網址。
+- ⬜ **Phase 2**：部落格／新聞系統，定期發佈日本房產資訊做內容行銷引流。
+- ⬜ **Phase 3**：瀏覽紀錄／熱度提示、物件詳情頁「相似物件」推薦、收藏清單。
+- ⬜ **Phase 4**：留名單表單（寫入 Supabase `leads` 表）、GA4 訪客追蹤、業務端通知。
+- ⬜ **Phase 5**：n8n 物件資料抓取管線修復——常有抓不到照片／說明的情況，初步判斷是來源網站 JS 動態載入圖片或防盜連保護所致，尚待實際檢視 workflow 才能精準修復。
 
-這些項目已規劃成 Phase 1–5，會在後續各自的工作階段中處理，屆時會再更新本文件對應章節。
+每完成一個 Phase 都會回來更新本文件對應章節，不要假設這裡列的「⬜ 尚未開始」永遠正確——實作前先確認一下對應的檔案是否已經存在。
 
 ## 樣式
 
