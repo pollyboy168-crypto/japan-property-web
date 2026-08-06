@@ -186,18 +186,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans scroll-smooth">
-      {/* 最頂部升級公告 Banner */}
-      <div className="bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 text-white border-b border-blue-800/60">
-        <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-center gap-2 text-center">
-          <span className="animate-pulse text-base leading-none">✨</span>
-          <p className="text-xs sm:text-sm font-bold tracking-wide">
-            2026 網站最新升級版
-            <span className="mx-1.5 text-blue-400/70">-</span>
-            <span className="text-amber-300">Powered by Claude Code</span>
-          </p>
-        </div>
-      </div>
-
       {/* 頂部 Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -284,6 +272,12 @@ export default function Home() {
               <div className="text-blue-600 text-3xl font-black">02</div>
               <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">🏯 土地永久產權</h3>
               <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">連同土地一併買下，世襲制無使用年限，作為代代相傳的堅實資產。</p>
+            </div>
+
+            <div className="bg-slate-50 p-6 sm:p-8 rounded-2xl border border-slate-200 space-y-3">
+              <div className="text-emerald-600 text-3xl font-black">03</div>
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">💰 房價比台灣親民，基期低回報高</h3>
+              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">台北新北一套老公寓的價格，在大阪市中心（心齋橋/難波）就能買下整棟鋼構大樓或透天厝！低房價門檻配上 6%-10% 的高淨回報，性價比遠勝台港與東南亞。</p>
             </div>
           </div>
         </section>
