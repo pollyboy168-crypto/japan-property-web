@@ -10,6 +10,7 @@ import ContactCta from '@/components/ContactCta';
 import GalleryModal from '@/components/GalleryModal';
 import SiteFooter from '@/components/SiteFooter';
 import LineFab from '@/components/LineFab';
+import LeadFormModal from '@/components/LeadFormModal';
 import RecentlyViewedRail from '@/components/RecentlyViewedRail';
 import { getAllProperties } from '@/lib/properties';
 import { getFavorites } from '@/lib/clientStorage';
@@ -108,6 +109,7 @@ export default function Home() {
       <SiteFooter />
 
       <LineFab />
+      <LeadFormModal variant="fab" />
     </div>
   );
 }

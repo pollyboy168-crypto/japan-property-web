@@ -5,6 +5,8 @@ import { formatPropertyPrice, companyInfo } from '@/lib/constants';
 import TrackPropertyView from '@/components/TrackPropertyView';
 import FavoriteButton from '@/components/FavoriteButton';
 import SimilarProperties from '@/components/SimilarProperties';
+import LeadFormModal from '@/components/LeadFormModal';
+import LineClickLink from '@/components/LineClickLink';
 
 // Cloudflare Pages (@cloudflare/next-on-pages) 只支援 edge runtime 的動態路由，
 // 且目前不支援 ISR，因此這裡改用「每次請求都重新向 Supabase 抓取」確保資料永遠最新。
@@ -157,14 +159,16 @@ export default async function PropertyDetailPage({ params }) {
               <span className="font-bold text-emerald-600 text-lg">{property.roi}%</span>
             </div>
 
-            <a
+            <LineClickLink
               href={property.lineLink}
-              target="_blank"
-              rel="noopener noreferrer"
+              source="property_detail"
+              propertyId={property.id}
               className="block text-center bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition shadow-sm"
             >
               💬 透過 LINE 詢問此物件
-            </a>
+            </LineClickLink>
+
+            <LeadFormModal variant="inline" propertyId={property.id} propertyTitle={property.title} />
           </div>
         </div>
 

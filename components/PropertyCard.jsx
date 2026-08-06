@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import FavoriteButton from '@/components/FavoriteButton';
+import { trackEvent } from '@/lib/analytics';
 
 export default function PropertyCard({ item, priceLabel, onViewGallery, onToggleFavorite }) {
   return (
@@ -69,6 +70,7 @@ export default function PropertyCard({ item, priceLabel, onViewGallery, onToggle
               rel="noopener noreferrer"
               aria-label="透過 LINE 詢問此物件"
               title="透過 LINE 詢問此物件"
+              onClick={() => trackEvent('line_click', { source: 'property_card', property_id: item.id })}
               className="shrink-0 w-11 text-center border border-emerald-500 text-emerald-600 hover:bg-emerald-50 text-base font-bold py-2.5 rounded-lg transition flex items-center justify-center"
             >
               💬

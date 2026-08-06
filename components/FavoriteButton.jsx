@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { isFavorite, toggleFavorite } from '@/lib/clientStorage';
+import { trackEvent } from '@/lib/analytics';
 
 // 獨立管理自己的收藏狀態（讀寫 localStorage），不依賴外部 state，
 // 可以直接掛在物件卡或詳情頁任何地方使用。
@@ -21,6 +22,7 @@ export default function FavoriteButton({ propertyId, className = '', onToggle })
     setFavorited(next);
     // 選擇性通知外層（例如首頁的「只看收藏」清單需要知道有東西變動了）
     onToggle?.(propertyId, next);
+    trackEvent('favorite_toggle', { property_id: propertyId, favorited: next });
   };
 
   return (

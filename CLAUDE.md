@@ -35,8 +35,10 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 **任何需要操作網頁介面才能完成的事，優先直接用「Claude in Chrome」（`mcp__claude-in-chrome__*` 工具）動手做，不要只是把步驟或錯誤訊息請使用者手動去查再貼回來。** 例如：
 
 - 到 Cloudflare Dashboard 查閱部署狀態、建置 log、環境變數設定
-- 到 Supabase Dashboard 查閱／修改資料表內容、執行 SQL、檢查 RLS policy
+- 到 Supabase Dashboard 查閱／修改資料表內容、檢查 RLS policy
 - 其他任何「打開網頁、點一點、看畫面」就能完成的操作
+
+**Supabase SQL（建表、加欄位、設定 RLS policy 等 schema 變更）預設由 Claude 直接用 Chrome 到 SQL Editor 貼上執行**（2026-08-06 使用者再次確認），不要再像過去那樣把 SQL 寫給使用者、請他自己去貼上執行——那是在還沒有 Chrome 存取能力時的暫時做法，現在有能力了就直接做。實際做法：`navigator.clipboard.writeText(sql)` 把 SQL 寫進剪貼簿，再用 `key` 動作按 `ctrl+v` 貼進 SQL Editor（Monaco 編輯器，直接用 `type` 逐字輸入容易被自動補括號機制弄亂，貼上比較穩定），送出前可用 `javascript_tool` 讀 `window.monaco.editor.getModels()[0].getValue()` 確認貼上內容跟預期一致，再點 Run。**唯一例外**：`DROP`／`DELETE`／`TRUNCATE` 這類會刪資料或砍掉現有結構的破壞性 SQL，一樣要先跟使用者確認過才能執行，不能因為現在有能力自動做就跳過確認——這條界線沒有變。
 
 這跟 Claude Code 內建、專門拿來測試 `localhost` 與正式站畫面的 Browser pane（`mcp__Claude_Browser__*`）是兩個不同的工具——Browser pane 沒有使用者的登入狀態，Claude in Chrome 操作的是使用者真實、已登入的 Chrome。
 
@@ -74,6 +76,10 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - 分頁邏輯完全在前端進行（`itemsPerPage = 12`），是直接對已抓取到的 `properties` 陣列做切片，並沒有依頁碼向 Supabase 做伺服器端分頁查詢（初始抓取就已經透過 `.range(0, 999)` 一次撈到最多 1000 筆）。
 - 幣別切換（日圓／台幣）只是前端用固定匯率相乘（`jpyToTwd = 0.21`，在 `lib/constants.js`），並非即時匯率。
 - **LINE 詢問入口（2026-08-06 精簡後）**：全站只保留三種強度的 LINE CTA，避免滿版綠色按鈕造成視覺疲勞——① 頁首導覽列一顆常駐按鈕；② 每張物件卡是「📷 看實景照片」＋一顆小型 icon-only 外框按鈕（`border-emerald-500`，不是實心填色）；③ 全站唯一的固定浮動按鈕（`LineFab.jsx`，`fixed bottom-5 right-5`），滾動到任何位置都能一鍵詢問。頁尾「專人諮詢」區塊、相簿彈窗、物件詳情頁各自的按鈕視為單一情境下的自然收尾 CTA，不算在「精簡」範圍內。新增任何 LINE 相關按鈕前，先確認是否已經有上述入口可以涵蓋，避免又疊加出一整片綠色。
+- **`components/LeadFormModal.jsx`**（2026-08-06 Phase 4 新增）：留名單表單＋彈窗，自己管理開關與送出狀態，`variant="fab"` 是首頁固定浮動按鈕（`bottom-24 right-5`，故意疊在 `LineFab` 正上方、不是同一顆，兩者都要留著），`variant="inline"` 是物件詳情頁區塊按鈕，會帶入 `propertyId`／`propertyTitle`。表單送到 `app/api/leads/route.js`。
+- **`components/GoogleAnalytics.jsx`**（2026-08-06 Phase 4 新增）：掛在 `app/layout.jsx`，用 `next/script` 載入 GA4，`NEXT_PUBLIC_GA_MEASUREMENT_ID` 沒設定就整個不掛載、不送出任何請求。
+- **`lib/analytics.js` 的 `trackEvent(name, params)`**（2026-08-06 Phase 4 新增）：安全呼叫 `window.gtag` 的小工具，GA4 還沒載入時靜默不做事。目前埋了三個自訂事件：`line_click`（`LineFab`／`PropertyCard`／`components/LineClickLink.jsx`）、`favorite_toggle`（`FavoriteButton`）、`lead_submitted`（`LeadFormModal` 送出成功時）。
+- **`components/LineClickLink.jsx`**：純粹是一個會送 `line_click` 事件的 `<a>`，讓 server component（例如物件詳情頁）也能追蹤 LINE 點擊，不需要把整頁改成 client component。
 
 ## 部落格發布流程（2026-08-06 Phase 2）
 
@@ -85,17 +91,29 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - **發布**：使用者到 Supabase Table Editor 把該筆 `status` 手動改成 `published`，可順便填 `published_at`（留空的話，`/blog` 列表與文章頁不會顯示日期，也不影響排序/顯示邏輯，但建議之後補上比較完整）。
 - 目前有一篇已發布：`/blog/osaka-tokku-minpaku-2026-shinsei-shuryo`（大阪特區民泊新規受理截止），是驗證整條「Claude 寫草稿 → 使用者審核 → 手動發布」鏈路用的第一篇真實文章，主題來自升級藍圖研究時查到、對現有網站「特區民泊 365 天」行銷文案有實質影響的時事。
 
+## 留名單與訪客追蹤流程（2026-08-06 Phase 4）
+
+- **資料表 `leads`**：欄位 `id`(uuid PK) / `name` / `contact` / `message` / `property_id` / `property_title` / `source_url` / `created_at`。RLS 只有一條 policy：`anon` 可以 `insert`（`with check (true)`）——**沒有 `select` policy**，代表 anon key 完全查不到任何一筆留言，比 `blog_posts` 更嚴格，因為這張表存的是訪客個資，要看名單只能到 Supabase Dashboard 的 Table Editor。這張表是 2026-08-06 由 Claude 直接透過 Claude in Chrome 在 Supabase SQL Editor 建立的（見上方「操作 Cloudflare／Supabase 等外部網頁介面」一節的標準做法）。
+- **送出流程**：`components/LeadFormModal.jsx` → `POST /api/leads`（`app/api/leads/route.js`，edge runtime）→ 用 anon key 寫入 `leads` 表 → 呼叫 Resend API 寄通知信給 `LEAD_NOTIFICATION_EMAIL`。**Email 寄送失敗不影響回傳結果**——名單有沒有存進 Supabase 才是重點，寄信只記 log、不會讓使用者看到送出失敗。
+- **防機器人**：表單有一個視覺隱藏（`position: absolute; left: -9999px`，不是 `display:none`）的 honeypot 欄位 `website`，一般訪客看不到也不會填；後端只要收到這個欄位有值，就靜默回 `{ok:true}` 但不寫入資料庫，不用 captcha。
+- **GA4**：Measurement ID `G-5T1TG1MG5D`，帳戶／資源名稱都叫「株式会社和日」／「日本地產與民宿投資專家」，2026-08-06 由 Claude 透過 Claude in Chrome 在使用者的 Google 帳號（`pollyboy168@gmail.com`）建立。
+- **Resend（Email 通知）**：帳號用同一個 Google 帳號登入（`pollyboy168@gmail.com`），API key 存在 `RESEND_API_KEY`。**目前還沒驗證自訂寄件網域**，寄件位址固定是 Resend 的預設測試網域 `onboarding@resend.dev`，收件位址也只能是申請帳號當下那個 Google 帳號的信箱（剛好就是 `pollyboy168@gmail.com`，是使用者自己的信箱，堪用）。之後如果要換成 `xxx@her-yow.com` 這種自訂寄件位址，需要到 Resend 的 Domains 頁面驗證網域（可能要加 DNS 記錄，`her-yow.com` 的 DNS 大概率也在 Cloudflare 上管理）。
+
 ## 環境變數
 
 - `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`：Supabase 專案的 URL 與 **anon public key**（設計上就是要曝露在瀏覽器端的公開金鑰，真正的存取控制要靠 Supabase 的 Row Level Security，不是靠隱藏這把金鑰）。
+- `NEXT_PUBLIC_GA_MEASUREMENT_ID`（2026-08-06 Phase 4 新增）：GA4 Measurement ID，本身不是敏感資訊，公開曝露在瀏覽器本來就是 GA4 的設計。
+- `RESEND_API_KEY`（2026-08-06 Phase 4 新增）：**伺服器端專用，沒有 `NEXT_PUBLIC_` 前綴，絕對不能出現在會被瀏覽器讀到的地方**。只有 `app/api/leads/route.js` 這個 edge route 會用到。
+- `LEAD_NOTIFICATION_EMAIL`（2026-08-06 Phase 4 新增）：留名單通知信要寄到哪個信箱，同樣是伺服器端專用。
 - 本機開發：複製 `.env.local.example` 為 `.env.local` 並填入實際值（`.env.local` 已加入 `.gitignore`，不會被 commit）。
-- **Cloudflare Pages 正式站**：必須在 Cloudflare Pages 專案設定 → Settings → Environment variables 裡，把這兩個變數加到 Production（建議 Preview 也一併加）。這是 2026-08-06 資安強化時把金鑰從原始碼移出後才需要的步驟——**若忘記在 Cloudflare 專案設定同步的話，正式站會抓不到任何物件資料**。
-- 程式碼裡（`app/page.jsx`）不應該再出現任何寫死的金鑰或 fallback 值；若環境變數未設定，`supabase` client 會拿到 `undefined`，並在 console 印出明確錯誤，方便排查而不是靜默使用一把過期的金鑰。
+- **Cloudflare Pages 正式站**：必須在 Cloudflare Pages 專案設定 → Settings → Environment variables 裡，把上面這幾個變數加到 Production（建議 Preview 也一併加）。這是 2026-08-06 資安強化時把金鑰從原始碼移出後才需要的步驟——**若忘記在 Cloudflare 專案設定同步的話，正式站會抓不到任何物件資料，或是 GA4／留名單功能不會動作**。
+- 程式碼裡不應該再出現任何寫死的金鑰或 fallback 值；若環境變數未設定，`supabase` client 會拿到 `undefined`，並在 console 印出明確錯誤，方便排查而不是靜默使用一把過期的金鑰。
 
 ## 資安基本盤
 
-- **安全標頭**：`public/_headers` 定義了 CSP、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy`、`Permissions-Policy`、HSTS。這個檔案會被 `@cloudflare/next-on-pages` 原樣複製進部署輸出，Cloudflare Pages 會依此檔案套用回應標頭。目前 CSP 的 `script-src`／`style-src` 還帶 `'unsafe-inline'`（Next.js App Router 與 Tailwind 現階段需要），屬於過渡性設定，之後若要收緊建議改用 nonce-based CSP。物件圖片來源網域不固定（來自多家日本房產網站的抓取結果），因此 `img-src` 目前是放寬到 `https:` 而非白名單制。
+- **安全標頭**：`public/_headers` 定義了 CSP、`X-Frame-Options`、`X-Content-Type-Options`、`Referrer-Policy`、`Permissions-Policy`、HSTS。這個檔案會被 `@cloudflare/next-on-pages` 原樣複製進部署輸出，Cloudflare Pages 會依此檔案套用回應標頭。目前 CSP 的 `script-src`／`style-src` 還帶 `'unsafe-inline'`（Next.js App Router 與 Tailwind 現階段需要），屬於過渡性設定，之後若要收緊建議改用 nonce-based CSP。物件圖片來源網域不固定（來自多家日本房產網站的抓取結果），因此 `img-src` 目前是放寬到 `https:` 而非白名單制。**2026-08-06 Phase 4 加了 GA4 需要的網域**：`script-src` 加 `https://www.googletagmanager.com`，`connect-src` 加 `https://www.google-analytics.com`／`https://*.google-analytics.com`／`https://*.analytics.google.com`——之後如果加其他第三方追蹤／服務，記得同樣要更新這個檔案，不然會被自己的 CSP 擋掉（Phase 0 的教訓）。
 - **金鑰管理**：見上方「環境變數」一節，絕對不要把 Supabase 金鑰、未來任何第三方 API 金鑰寫死在會進 git 的檔案裡。
+- **⚠️ 待處理：`properties` 資料表 RLS 目前是關閉的（`UNRESTRICTED`）**（2026-08-06 Phase 4 驗證 `leads` 表時，在 Supabase Table Editor 順手看到）。跟 `blog_posts`／`leads` 不一樣，`properties` 表完全沒有設定 Row Level Security，理論上代表 anon key 不只能讀，可能連寫都不會被擋（實際權限還要再測試確認）。目前網站的使用方式只有讀取，還沒有出過事，但這是一個已知的資安缺口，應該找時間補上「anon 只能 SELECT」的 RLS policy——不要主動去改，先跟使用者確認這張表是不是還有其他地方（例如 n8n 寫入流程）依賴目前完全開放的寫入權限，避免補了 RLS 反而讓既有的資料寫入管線斷掉。
 - **npm 套件漏洞**：`npm audit` 目前仍有約 39 筆已知漏洞，但幾乎都集中在 `wrangler` / `@cloudflare/next-on-pages` / `miniflare` 這條開發工具鏈的間接依賴（`tar`、`undici`、`ws`），**這條工具鏈只有本機手動備援部署（`npm run deploy`）會用到，Cloudflare Pages 的正式建置流程不會執行它**，且本專案規範本來就禁止使用這些指令部署（見上方部署說明）。要徹底清除需要把 `wrangler` 從 3.x 升到 4.x（breaking change），目前先不做，之後排入獨立任務評估。
 
 ## Cloudflare 部署踩過的坑（2026-08-06，Phase 1 上線時）
@@ -117,7 +135,7 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - ✅ **Phase 1（2026-08-06）**：`page.jsx` 拆元件、`lib/properties.js` 共用資料層、`/properties/[id]` 物件獨立詳情頁（SSR + `RealEstateListing` JSON-LD + 動態 OG）、全站 `Organization` JSON-LD、`sitemap.js`／`robots.js`。首頁列表本身仍是 client-only（見上方「首頁資料流程」），但每筆物件已經有可被索引的獨立網址。
 - ✅ **Phase 2（2026-08-06）**：`blog_posts` 資料表＋RLS、`lib/blog.js`、`/blog` 列表頁與 `/blog/[slug]` 內文頁（`BlogPosting` JSON-LD＋動態 OG）、`sitemap.js` 納入文章網址、`scripts/create-blog-draft.mjs` 草稿寫入腳本、發布流程見上方「部落格發布流程」一節。第一篇文章已上線驗證整條鏈路可行。
 - ✅ **Phase 3（2026-08-06）**：`lib/clientStorage.js`（localStorage 訪客個人紀錄）、首頁「你看過的物件」／「只看收藏」、物件詳情頁收藏按鈕與「你可能也喜歡」相似物件推薦。細節見上方「架構重點」對應條目。
-- ⬜ **Phase 4**：留名單表單（寫入 Supabase `leads` 表）、GA4 訪客追蹤、業務端通知。
+- ✅ **Phase 4（2026-08-06）**：`leads` 資料表＋RLS、`app/api/leads/route.js`、`LeadFormModal.jsx`（首頁浮動按鈕＋物件詳情頁）、GA4（`GoogleAnalytics.jsx` + 三個自訂事件）、Resend Email 通知。細節見上方「留名單與訪客追蹤流程」一節。順帶發現 `properties` 表 RLS 未啟用，記錄在「資安基本盤」待處理。
 - ⬜ **Phase 5**：n8n 物件資料抓取管線修復——常有抓不到照片／說明的情況，初步判斷是來源網站 JS 動態載入圖片或防盜連保護所致，尚待實際檢視 workflow 才能精準修復。
 
 每完成一個 Phase 都會回來更新本文件對應章節，不要假設這裡列的「⬜ 尚未開始」永遠正確——實作前先確認一下對應的檔案是否已經存在。

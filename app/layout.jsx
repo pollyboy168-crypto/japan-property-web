@@ -1,5 +1,6 @@
 import './globals.css';
 import { companyInfo } from '@/lib/constants';
+import GoogleAnalytics from '@/components/GoogleAnalytics';
 
 const SITE_URL = 'https://japan.her-yow.com';
 
@@ -31,6 +32,7 @@ export default function RootLayout({ children }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
+        <GoogleAnalytics />
         {children}
       </body>
     </html>
