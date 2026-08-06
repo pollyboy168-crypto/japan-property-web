@@ -56,6 +56,15 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - **金鑰管理**：見上方「環境變數」一節，絕對不要把 Supabase 金鑰、未來任何第三方 API 金鑰寫死在會進 git 的檔案裡。
 - **npm 套件漏洞**：`npm audit` 目前仍有約 39 筆已知漏洞，但幾乎都集中在 `wrangler` / `@cloudflare/next-on-pages` / `miniflare` 這條開發工具鏈的間接依賴（`tar`、`undici`、`ws`），**這條工具鏈只有本機手動備援部署（`npm run deploy`）會用到，Cloudflare Pages 的正式建置流程不會執行它**，且本專案規範本來就禁止使用這些指令部署（見上方部署說明）。要徹底清除需要把 `wrangler` 從 3.x 升到 4.x（breaking change），目前先不做，之後排入獨立任務評估。
 
+## Cloudflare 部署踩過的坑（2026-08-06，Phase 1 上線時）
+
+在第一次新增任何動態／edge route（`sitemap.js`、`robots.js`、`/properties/[id]`）之前，本專案的正式站全部是純靜態頁面，沒踩過這些坑：
+
+1. **`@cloudflare/next-on-pages` 版本卡在 1.13.0**：edge function 打包階段會出現 `Could not resolve "async_hooks"`（已知 bug，1.13.6 修好）。修法是把 `package.json` 的 `@cloudflare/next-on-pages` 鎖定在 **`1.13.15`**（不要用最新的 1.13.16，那版加了 `next >= 14.3.0` 的 peer 限制，Next.js 根本沒發過 14.3.0，會裝不起來，目前專案是 `next@14.2.x`）。
+2. **`wrangler.toml` 的 `compatibility_date` 太舊**：原本是 `2024-03-01`，但 `nodejs_compat` 旗標的行為是綁 `compatibility_date` 的，Cloudflare／`next-on-pages` 文件要求至少 `2024-09-23`。日期太舊會導致「任何需要在請求當下執行的 edge function」回應通用的 `Internal Server Error`（連完全不呼叫 Supabase 的純靜態 `robots.js` 都會噴），但已經預先建置好的靜態頁面（像首頁）不受影響——這個症狀組合是辨識這個問題的關鍵線索。已改成 `2024-09-23`。
+3. 這個專案因為長期都是全靜態頁面，`wrangler.toml` 的 `compatibility_date` 一直沒人注意到已經過舊；**之後如果又要新增任何 server-rendered／edge route，先確認這個日期跟 `@cloudflare/next-on-pages` 版本是不是又落後了**，不要假設現有設定永遠適用。
+4. Cloudflare Pages Functions（透過 `next-on-pages` 產生）目前在這個帳戶的 Dashboard 上沒有 Observability／即時 log 可看（試過 Functions 分頁、Observability Events、Metrics，都是空的），排查 500 錯誤時沒辦法從 Dashboard 直接拿到 stack trace，只能靠通用症狀比對／查官方 issue，或改用 `wrangler pages deployment tail`（純讀取、不會動用戶端資料，需要另外跟使用者確認是否要用，因為專案規範原則上避免呼叫 wrangler）。
+
 ## 已知架構缺口與後續規劃
 
 網站目前的完整升級藍圖（含競品功能研究、13 項目標對照、分階段計畫）記錄在對話歷史中的研究報告裡。進度：
