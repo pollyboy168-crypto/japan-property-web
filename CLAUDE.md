@@ -30,6 +30,20 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 3. 待 Cloudflare 自動部署完成（可用 `curl` 輪詢正式站，檢查新內容的關鍵字/元素是否已出現）後，確認畫面內容已經是最新版本。
 4. 確認部署完成後，**自動用電腦的預設瀏覽器**開啟正式站網址 **https://japan.her-yow.com/** 讓使用者親眼確認（Windows 環境用 `start https://japan.her-yow.com/`；這是開啟系統瀏覽器，不是 Claude Code 內建的 Browser pane）。
 
+## 操作 Cloudflare／Supabase 等外部網頁介面（2026-08-06 使用者指示）
+
+**任何需要操作網頁介面才能完成的事，優先直接用「Claude in Chrome」（`mcp__claude-in-chrome__*` 工具）動手做，不要只是把步驟或錯誤訊息請使用者手動去查再貼回來。** 例如：
+
+- 到 Cloudflare Dashboard 查閱部署狀態、建置 log、環境變數設定
+- 到 Supabase Dashboard 查閱／修改資料表內容、執行 SQL、檢查 RLS policy
+- 其他任何「打開網頁、點一點、看畫面」就能完成的操作
+
+這跟 Claude Code 內建、專門拿來測試 `localhost` 與正式站畫面的 Browser pane（`mcp__Claude_Browser__*`）是兩個不同的工具——Browser pane 沒有使用者的登入狀態，Claude in Chrome 操作的是使用者真實、已登入的 Chrome。
+
+**首次使用注意**：使用者的帳號目前連了多個 Chrome 瀏覽器實例，呼叫 `tabs_context_mcp` 若回報「Multiple Chrome browsers are connected」，必須依照錯誤訊息指示，用 `AskUserQuestion` 列出每一個已連線瀏覽器（含 deviceId）加上「讓使用者自己在 Chrome 裡點 Connect 選」這個選項，等使用者選定後才能繼續操作，不要自己擅自選一個。
+
+涉及帳號設定變更、刪除資料等有風險的操作，仍然要依照一般安全準則先跟使用者確認，不因為改用 Claude in Chrome 操作就自動視為已授權。
+
 ## 架構重點
 
 - **`app/page.jsx`**（2026-08-06 Phase 1 拆分後）現在只是組合元件的進入點——資料/分頁/貨幣/相簿 state 留在這裡，實際渲染委派給 `components/` 下的 `SiteHeader`、`HeroBanner`、`WhyOsaka`、`PropertyGrid`（內含 `PropertyCard`）、`ContactCta`、`GalleryModal`、`SiteFooter`、`LineFab`。要改某個區塊的畫面，先去對應的元件檔案找，不要假設全部邏輯還在 `page.jsx` 裡。`components/YieldCalculator.jsx` 維持獨立掛載在 `<section id="calculator">`，未被納入這次拆分（本來就是獨立元件）。
