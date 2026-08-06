@@ -2,9 +2,9 @@ import Link from 'next/link';
 import FavoriteButton from '@/components/FavoriteButton';
 import { trackEvent } from '@/lib/analytics';
 
-export default function PropertyCard({ item, priceLabel, onViewGallery, onToggleFavorite }) {
+export default function PropertyCard({ item, priceLabel, marketPriceLabel, onViewGallery, onToggleFavorite }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition flex flex-col justify-between">
+    <div className={`bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition flex flex-col justify-between ${item.isFlagship ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-slate-200'}`}>
 
       {/* 物件封面圖與開相簿 */}
       <div className="relative h-48 bg-slate-100 cursor-pointer group" onClick={() => onViewGallery(item)}>
@@ -49,7 +49,8 @@ export default function PropertyCard({ item, priceLabel, onViewGallery, onToggle
         <div className="space-y-3 border-t border-slate-100 pt-3">
           <div className="flex justify-between items-end">
             <div>
-              <span className="text-[10px] text-slate-400 block">預售總價 (加價 30% 包套價)</span>
+              <span className="text-[10px] text-slate-400 block line-through decoration-slate-400">市場行情價 {marketPriceLabel}</span>
+              <span className="text-[10px] text-rose-500 font-bold block">超值破盤價 (預售總價)</span>
               <span className="font-black text-blue-600 text-xl">
                 {priceLabel}
               </span>

@@ -22,6 +22,7 @@ export default function SiteHeader({ propertiesCount, currency, setCurrency }) {
           <a href="#calculator" className="hover:text-blue-600 transition">投資試算</a>
           <a href="#flagship" className="hover:text-blue-600 transition">旗艦民宿 (Shinsai Wings)</a>
           <a href="#properties" className="hover:text-blue-600 transition">精選物件 ({propertiesCount})</a>
+          <Link href="/news" className="hover:text-blue-600 transition">熱門新聞</Link>
           <Link href="/blog" className="hover:text-blue-600 transition">日本房產新訊</Link>
         </nav>
 

@@ -111,7 +111,52 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - **n8n workflow「01_大阪房產物件LINE連結生成測試」**（`https://jackystwu.app.n8n.cloud/workflow/TsyPpjdTx4eTi6z5`）：整個重建成 3 個節點——`Schedule Trigger`（沿用原本的每日排程）→ `Code in JavaScript`（一個節點做完全部：抓 3 個 Kenbiya 城市列表頁取得詳情頁連結、逐一抓詳情頁、regex 解析出 `id`／`title_zh`／`price_jpy`／`price_twd`／`location`／`roi`／`type`／`image_url`／`images`／`original_url`／`description_zh`，缺標題／價格／照片的直接跳過不硬湊；內建 429 重試（等 8 秒重試，最多 3 次）與節流（每個請求間隔 1.5 秒，避免觸發健美家的 rate limit）；用 `this.helpers.httpRequest.bind(this.helpers)` 發請求，這是 n8n Code 節點內建、不需要額外套件就能用的 HTTP 工具）→ `HTTP Request`（`POST` 到 `https://japan.her-yow.com/api/sync-properties`，header 帶 `Authorization: Bearer <SYNC_SECRET>`，body 用 JSON 欄位模式帶 `records` = expression `{{ $json.records }}`）。舊的 `Loop Over Items`／`Wait`／假資料生成 `Code` 節點／舊的 Supabase upsert 節點全部刪除。**修改 n8n workflow 後記得要按「Publish」，不是自動存檔的。**
 - **`SYNC_SECRET` 環境變數**：隨機產生的長字串，本機 `.env.local` 與 Cloudflare Pages 專案設定（Production）都要有，且要跟 n8n HTTP Request 節點的 `Authorization` header 值一致。單純用來防止陌生人對外呼叫這支同步 API 亂寫資料，不是給使用者登入用的。
 - **抓取範圍**：目前鎖定大阪市（`osaka-shi`）前兩頁＋堺市（`sakai-shi`）第一頁，最多 24 筆詳情頁，足以驗證整條真實資料管線可行，之後如果要擴大涵蓋範圍（更多城市／更多頁）只要改 `Code in JavaScript` 節點裡的 `LISTING_PAGES` 陣列與 `MAX_LISTINGS`，同時要留意 Cloudflare／n8n 的 subrequest 上限與健美家的 rate limit（實測連續高頻測試會觸發 429，且封鎖時間不算短，測試時務必節流、不要短時間內重複執行整個 workflow）。
-- **⚠️ 待處理**：資料庫裡舊的假資料（`id` 格式 `PROP-{n}-{nnn}`，約 413 筆）跟新的真實資料（`id` 格式 `KENBIYA-{listingId}`）不會撞號，代表兩者會並存顯示在網站上，除非額外清理。是否要清掉舊的假資料、怎麼清（全部刪除？只留没有對應真實資料的？），是破壞性操作，**還沒問過使用者，不要主動執行 DELETE**。
+- **舊假資料已清除（2026-08-07）**：資料庫裡原本有 3 批舊假資料——`PROP-{n}-{nnn}`（400 筆）、`JP-OSAKA-001~010`（10 筆）、`KENBIYA-{純數字}`（3 筆，注意這批的 id 前綴跟新的真實資料撞了，但內容是 2026-08-04 寫入的舊假資料，`image_url`／`description_zh` 都是 `null`，標題是通用模板文字）——都已經過使用者確認後用 Supabase REST API 的 `DELETE` 整批刪除。目前 `properties` 表只剩下透過新管線寫入的真實 Kenbiya 物件（2026-08-07 清理當下是 17 筆）。**之後如果又在表裡看到 `image_url` 或 `description_zh` 是 `null`、標題像「大阪熱門投資物業」這種通用模板文字的資料列，大概率又是某個舊流程殘留的假資料，不是新管線寫的。**
+
+## Phase 6（2026-08-07）：新聞行銷、旗艦案例、定價策略、搜尋與 UX 優化
+
+使用者在同一天內分批送出這批需求（新聞區塊＋SEO／黃金案例／定價公式／擴大 n8n 涵蓋範圍／搜尋篩選／收藏購物車／行動裝置分頁），並明確指示「自動允許所有的問題，不要中斷」。以下記錄每項功能的實際落地方式：
+
+### 定價公式：市場行情價 vs 超值破盤價
+
+`lib/properties.js` 的 `normalizeProperty()` 現在同時輸出兩個價格：`priceJPY`（原始 `price_jpy` × 1.3，維持 Phase 1 就有的「超值破盤價／預售總價」，也就是實際掛牌售價，多出原價 30% 是公司利潤）與新增的 `marketPriceJPY`（原始 `price_jpy` × 1.5，「市場行情價」，作為劃線對比的參考價）。`PropertyCard`、物件詳情頁、`FlagshipShowcase` 都改成同時顯示「市場行情價（劃線）」＋「超值破盤價（強調）」。**這兩個數字都是公式推算，不是真實市場調查或第三方估價**——`marketPriceJPY` 純粹是「原價 ×1.5」，是使用者要求的定價策略（reference/anchor pricing，零售業常見手法），不是真實可查證的市場行情。之後如果要改成真實市調數據，要另外接資料源，不能假設現有數字有任何調查依據。`formatPropertyPrice()`（`lib/constants.js`）同時修正成 `Math.round()` 到整數萬日圓再格式化，避免像 92,307,692 這種除不盡的原價出現「¥13,846.154 萬日圓」這種帶小數的顯示。
+
+### 旗艦民宿黃金案例（Shinsai Wings）
+
+原始版本（`git show f7f353b:app/page.jsx`）有寫死的「心齋橋圈 5層獨棟特區民泊 (Shinsai Wings)」旗艦物件展示區塊與「一站式改建與營運成功案例」3步驟說明，後來全站改成 Supabase 動態資料後這個區塊連同資料一起消失了。復原方式：
+- 在 Supabase `properties` 表手動插入一筆 `id = 'prop-shinsai-wings'` 的真實資料列，`price_jpy` 刻意設成 `92307692`（讓 ×1.3 後精確等於原始文案的「1.2億日圓」開價，×1.5 後變成「約1.38億」的市場行情價參考）。圖片目前還是沿用原版就有的 Unsplash 佔位圖（`photo-1503387762-...`），**不是真實的 Shinsai Wings 實景照，之後有真實照片要記得換掉 `image_url`／`images`**。
+- `lib/properties.js` 的 `normalizeProperty()` 本來就有 `isFlagship: propId === 'prop-shinsai-wings'` 這個 hardcode 判斷（沒被刪過），只是原本沒有對應資料列、也沒有專門的展示元件，等於是個沒接上的孤兒邏輯。
+- 新增 `components/FlagshipShowcase.jsx`（從 `properties` 陣列裡 `find` 這筆特定 id，找不到就整個不渲染）與 `components/RenovationCaseStudy.jsx`（純靜態行銷文案，跟 Supabase 無關），文案內容照抄原始版本，只把「和佑工程團隊」等舊稱呼統一成現在的「株式会社和日」。兩個元件都掛在 `app/page.jsx`，`FlagshipShowcase` 在 `WhyOsaka` 之後、試算器之前；`SiteHeader` 原本就有一個指向 `#flagship` 的導覽連結（一直都在，只是之前連到空區塊），現在終於接上。
+- `PropertyCard` 與 `lib/properties.js` 的 `tags` 陣列都加了 `isFlagship` 的特殊視覺處理（琥珀色外框／「👑 直營旗艦標的」標籤），讓它在一般物件牆裡也會特別顯眼。
+
+### 熱門新聞區塊（SEO 導流）
+
+**目的**：使用者想要透過大阪房產／民泊／觀光／萬博相關新聞，讓官網被 Google 收錄到更多長尾關鍵字、爭取新聞標題帶來的自然搜尋流量。
+
+- **`news_posts` 資料表**（2026-08-07 由 Claude 透過 Claude in Chrome 在 Supabase SQL Editor 建立，用 `window.monaco.editor.getModels()[0].setValue(sql)` 直接寫入 SQL 字串繞過編輯器的自動補全括號問題——SQL Editor 用的是 Monaco，跟 n8n 的 CodeMirror 不同，`setValue()` 這招只對 Monaco 有效）：欄位 `id`／`slug`(unique)／`title`／`summary_zh`／`source_name`／`source_url`／`category`／`image_url`／`published_at`／`created_at`。RLS 允許 anon **insert 和 select 都開放**（`with check (true)` / `using (true)`）——跟 `blog_posts`／`leads` 不同，新聞是「每天自動蒐集、自動公開」的設計，沒有草稿/發布審核流程，因為新聞本身就是公開的聚合資訊，不像部落格文章代表公司自己的專業論述需要人工把關。
+- **版權設計**：只存「真實標題（事實/標題本身不受著作權保護）＋我們自己寫的一句話中文引言＋來源名稱＋來源連結」，**完全不轉載原始新聞內文**。`summary_zh` 的樣板是 `【日本新聞】{原文日文標題}（來源：{來源名稱}）。此為原文標題，完整內容請點擊下方連結閱讀原文。`——這是新聞聚合／摘要常見的合理使用範圍（跟 Google News、Feedly 這類新聞聚合服務的呈現方式一致：標題＋短摘要＋連回原站），不是重新發布完整文章。`app/api/sync-news/route.js` 的 `isValidRecord()` 也用 `summary_zh.length <= 500` 做一層防呆，避免不小心整段貼上完整內文。
+- **抓取來源：Google News RSS 搜尋**（`https://news.google.com/rss/search?q={query}&hl=ja&gl=JP&ceid=JP:ja`）——不需要 API 金鑰、公開端點、回傳標準 RSS XML，比逐一嘗試找日本房產新聞網站的 RSS／驗證能不能抓穩定得多。目前設定 4 組查詢：`大阪 不動産`／`大阪 民泊`／`大阪 観光`／`関西万博 夢洲`，各自標上對應的 `category`。`<link>` 欄位是 Google 的轉址連結（不是出版社原始網址），但點擊後會正常導到原文，這是 Google News RSS 的標準行為，直接拿來當 `source_url` 使用沒有問題。
+- **架構跟 Phase 5 的 `sync-properties` 完全對稱**：`app/api/sync-news/route.js` 只負責驗證＋upsert 進 Supabase，不對 Google News 發任何請求；抓取＋解析 RSS XML（regex-based，`<item>...</item>` 區塊配對）全部在 n8n 的 Code 節點執行，原因跟 Phase 5 一樣是繞開 Cloudflare Workers 對外 IP 可能被擋的風險（雖然還沒實測 Google News 是否真的會擋 Cloudflare IP，但既然架構模式已經驗證有效，直接沿用）。
+- **n8n workflow「02_大阪熱門新聞每日蒐集」**（新建的獨立 workflow，不是塞進物件那個 workflow 裡）：`Schedule Trigger`（每日 7am）→ `Code in JavaScript`（依序打 4 組 RSS 查詢、regex 解析、依 `guid` 去重、標題去掉 Google News 附加的「 - 來源名稱」尾綴、最多取前 15 筆）→ `HTTP Request`（`POST` 到 `/api/sync-news`，帶 `Authorization: Bearer <SYNC_SECRET>`，body 用 expression `{{ $json.records }}`）。**修改完也要記得按 Publish**，這個 workflow 目前的發布狀態要在完成本輪部署後手動確認。
+- **`lib/news.js`**：`getLatestNews(limit)`（首頁摘要區塊跟 `/news` 列表頁共用，只是 limit 不同）、`getNewsBySlug(slug)`。
+- **`app/news/page.jsx`／`app/news/[slug]/page.jsx`**：架構完全比照 `/blog`（`runtime = 'edge'` + `dynamic = 'force-dynamic'`、`generateMetadata()`、`NewsArticle` JSON-LD），差異是詳情頁不渲染長文，只有摘要 + 一顆「📰 閱讀原文（來源）→」外部連結按鈕。`components/NewsRail.jsx` 是首頁用的精簡版摘要牆（最多顯示 6 則，沒有新聞資料時整個區塊不渲染）。`SiteHeader` 加了 `/news` 導覽連結，`app/sitemap.js` 納入所有新聞網址。
+
+### 物件搜尋／篩選功能
+
+`components/PropertyFilterBar.jsx`：關鍵字（比對標題／地點）、區域（用 regex `/大阪[府市]?([^\d]{2,6}[市区町村])/` 從物件的 `location` 字串動態擷取出現過的市/區清單，不是寫死的選項）、總價上限（幾組固定級距）。三個條件都在 `app/page.jsx` 用 `useMemo` 對已經抓好的 `properties` 陣列做前端篩選，沒有另外打 Supabase 查詢（資料量只有幾百筆，前端篩選成本很低，跟既有的收藏篩選邏輯一致）。
+
+### 收藏清單購物車化
+
+`components/FavoritesCartWidget.jsx`：右下角浮動按鈕（`bottom-44`，刻意疊在 `LineFab`／`LeadFormModal` 浮動按鈕上方，避免三顆浮動按鈕互相重疊），有收藏才會顯示，紅色圓形徽章顯示收藏數量，點擊從右側滑出清單面板（圖片＋標題＋價格＋移除按鈕），是原本 `PropertyGrid` 頂部「只看收藏」篩選鈕之外的第二個入口——篩選鈕是「留在物件牆上只看收藏的」，這個是「隨時彈出來看清單、不用捲到物件牆」，兩者互補共存，不是取代關係。
+
+### 行動裝置分頁：頁碼分頁 → 載入更多
+
+`components/PropertyGrid.jsx` 移除了原本的頁碼分頁（`currentPage`／`totalPages`／上下兩組頁碼按鈕），改成「載入更多物件」按鈕（`app/page.jsx` 用 `visibleCount` state，每次點擊 `+ITEMS_PER_BATCH`，`ITEMS_PER_BATCH = 12`）。原因是窄螢幕下頁碼分頁換頁後新內容在畫面外，使用者感覺不到「換頁了」；「載入更多」是購物網站商品牆常見模式，新卡片直接接在後面出現，捲動軌跡連續、不會有「消失重來」的錯覺。篩選條件（關鍵字／區域／價格）改變時會重置 `visibleCount` 回到初始值。
+
+### ⚠️ 待處理（Phase 6 範圍內尚未完成）
+
+- **n8n 抓取涵蓋範圍擴大**：使用者原始需求是「搜尋日本房產熱門前100名網站、每個網站每個大阪分區挑5個熱門物件、累積到1000筆、去重、清除已下架物件」。實測過這條路線不可行——10 個來源裡只有健美家一個能穩定抓到真實資料（見上方 Phase 5 段落），逐一驗證 100 個未知網站在合理時間內做不到，且大部分會被反爬蟲擋下或需要 JS 渲染。**目前還沒有把 Kenbiya 抓取範圍擴大到更多大阪城市/分區**（現在只有 `osaka-shi` 前兩頁＋`sakai-shi` 第一頁），也還沒實作「去重」（`Prefer: resolution=merge-duplicates` 只處理同一次同步內的 upsert，不是主動比對整個資料庫）與「清除已下架物件」（比對本次抓到的 id 清單、刪除資料庫裡不在清單中的舊物件）的邏輯。之後如果要繼續，方向是擴大 `LISTING_PAGES` 陣列涵蓋更多大阪城市（大阪市其他區、東大阪、豐中、吹田等），並在 `app/api/sync-properties/route.js` 加一段「本次同步收到的 id 清單之外、且 id 是 `KENBIYA-` 開頭的舊物件視為已下架，予以刪除」的邏輯。
+- **旗艦物件真實照片**：`prop-shinsai-wings` 目前用的還是 Unsplash 佔位圖，不是真實的 Shinsai Wings 實景照片，需要使用者提供真實照片後手動更新 Supabase 該筆資料的 `image_url`／`images`。
 
 ## 環境變數
 

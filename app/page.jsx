@@ -1,33 +1,48 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import YieldCalculator from '@/components/YieldCalculator';
 import SiteHeader from '@/components/SiteHeader';
 import HeroBanner from '@/components/HeroBanner';
 import WhyOsaka from '@/components/WhyOsaka';
+import FlagshipShowcase from '@/components/FlagshipShowcase';
+import RenovationCaseStudy from '@/components/RenovationCaseStudy';
+import PropertyFilterBar from '@/components/PropertyFilterBar';
 import PropertyGrid from '@/components/PropertyGrid';
+import NewsRail from '@/components/NewsRail';
 import ContactCta from '@/components/ContactCta';
 import GalleryModal from '@/components/GalleryModal';
 import SiteFooter from '@/components/SiteFooter';
 import LineFab from '@/components/LineFab';
 import LeadFormModal from '@/components/LeadFormModal';
 import RecentlyViewedRail from '@/components/RecentlyViewedRail';
+import FavoritesCartWidget from '@/components/FavoritesCartWidget';
 import { getAllProperties } from '@/lib/properties';
+import { getLatestNews } from '@/lib/news';
 import { getFavorites } from '@/lib/clientStorage';
+
+const ITEMS_PER_BATCH = 12;
 
 export default function Home() {
   const [currency, setCurrency] = useState('JPY');
 
   // ----------------------------------------------------------------
-  // 🏠 動態物件資料庫與分頁 State
+  // 🏠 動態物件資料庫與「載入更多」State
   // ----------------------------------------------------------------
   const [properties, setProperties] = useState([]);
+  const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 12;
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_BATCH);
 
   const [activeGallery, setActiveGallery] = useState(null);
+
+  // ----------------------------------------------------------------
+  // 🔍 搜尋／篩選 State
+  // ----------------------------------------------------------------
+  const [keyword, setKeyword] = useState('');
+  const [region, setRegion] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
 
   // ----------------------------------------------------------------
   // ❤ 收藏清單 State（localStorage，訪客個人紀錄，非登入帳號）
@@ -39,6 +54,7 @@ export default function Home() {
     getAllProperties()
       .then(setProperties)
       .finally(() => setLoading(false));
+    getLatestNews(6).then(setNews);
     setFavorites(getFavorites());
   }, []);
 
@@ -48,25 +64,42 @@ export default function Home() {
 
   const handleToggleFavoritesOnly = () => {
     setShowFavoritesOnly((prev) => !prev);
-    setCurrentPage(1);
+    setVisibleCount(ITEMS_PER_BATCH);
   };
 
   // ----------------------------------------------------------------
-  // 📄 分頁計算邏輯 (無跳動極速切換)
+  // 🔍 篩選邏輯：關鍵字（標題/地點）、區域、總價上限
   // ----------------------------------------------------------------
-  const visibleProperties = showFavoritesOnly
-    ? properties.filter((item) => favorites.includes(item.id))
-    : properties;
+  const filteredProperties = useMemo(() => {
+    let list = showFavoritesOnly
+      ? properties.filter((item) => favorites.includes(item.id))
+      : properties;
 
-  const totalPages = Math.ceil(visibleProperties.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProperties = visibleProperties.slice(indexOfFirstItem, indexOfLastItem);
+    if (keyword.trim()) {
+      const kw = keyword.trim().toLowerCase();
+      list = list.filter((item) => item.title.toLowerCase().includes(kw) || item.location.toLowerCase().includes(kw));
+    }
 
-  const handlePageChange = (pageNumber) => {
-    if (pageNumber < 1 || pageNumber > totalPages) return;
-    setCurrentPage(pageNumber);
-    // 不再整頁滾動，流暢原地切換
+    if (region) {
+      list = list.filter((item) => item.location.includes(region));
+    }
+
+    if (maxPrice) {
+      list = list.filter((item) => item.priceJPY <= Number(maxPrice));
+    }
+
+    return list;
+  }, [properties, favorites, showFavoritesOnly, keyword, region, maxPrice]);
+
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_BATCH);
+  }, [keyword, region, maxPrice]);
+
+  const visibleProperties = filteredProperties.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredProperties.length;
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + ITEMS_PER_BATCH);
   };
 
   return (
@@ -79,6 +112,8 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
         <WhyOsaka />
 
+        <FlagshipShowcase properties={properties} />
+
         {/* 投資報酬率試算器 */}
         <section id="calculator" className="scroll-mt-20">
           <YieldCalculator />
@@ -86,20 +121,36 @@ export default function Home() {
 
         <RecentlyViewedRail properties={properties} currency={currency} />
 
-        <PropertyGrid
-          propertiesCount={visibleProperties.length}
-          currentProperties={currentProperties}
-          loading={loading}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-          currency={currency}
-          onViewGallery={setActiveGallery}
-          onToggleFavorite={handleFavoriteToggled}
-          favoritesCount={favorites.length}
-          showFavoritesOnly={showFavoritesOnly}
-          onToggleFavoritesOnly={handleToggleFavoritesOnly}
-        />
+        <NewsRail news={news} />
+
+        <div className="space-y-4">
+          <PropertyFilterBar
+            properties={properties}
+            keyword={keyword}
+            onKeywordChange={setKeyword}
+            region={region}
+            onRegionChange={setRegion}
+            maxPrice={maxPrice}
+            onMaxPriceChange={setMaxPrice}
+            resultCount={filteredProperties.length}
+          />
+
+          <PropertyGrid
+            propertiesCount={filteredProperties.length}
+            visibleProperties={visibleProperties}
+            hasMore={hasMore}
+            onLoadMore={handleLoadMore}
+            loading={loading}
+            currency={currency}
+            onViewGallery={setActiveGallery}
+            onToggleFavorite={handleFavoriteToggled}
+            favoritesCount={favorites.length}
+            showFavoritesOnly={showFavoritesOnly}
+            onToggleFavoritesOnly={handleToggleFavoritesOnly}
+          />
+        </div>
+
+        <RenovationCaseStudy />
 
         <ContactCta />
       </main>
@@ -110,6 +161,7 @@ export default function Home() {
 
       <LineFab />
       <LeadFormModal variant="fab" />
+      <FavoritesCartWidget properties={properties} favorites={favorites} currency={currency} onFavoritesChanged={handleFavoriteToggled} />
     </div>
   );
 }

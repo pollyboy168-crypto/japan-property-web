@@ -150,7 +150,8 @@ export default async function PropertyDetailPage({ params }) {
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4 h-fit">
             <div>
-              <span className="text-[11px] text-slate-400 block">預售總價 (加價 30% 包套價)</span>
+              <span className="text-[11px] text-slate-400 block line-through decoration-slate-400">市場行情價 {formatPropertyPrice(property.marketPriceJPY, 'JPY')}</span>
+              <span className="text-[11px] text-rose-500 font-bold block">超值破盤價 (預售總價)</span>
               <span className="font-black text-blue-600 text-2xl block">{formatPropertyPrice(property.priceJPY, 'JPY')}</span>
               <span className="text-xs text-slate-400">約 {formatPropertyPrice(property.priceJPY, 'TWD')}</span>
             </div>
