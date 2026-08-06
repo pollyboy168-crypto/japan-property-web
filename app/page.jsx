@@ -23,8 +23,12 @@ const companyInfo = {
 // ----------------------------------------------------------------
 // 💡 2. Supabase Client 初始化設定
 // ----------------------------------------------------------------
-const SUPABASE_URL = 'https://nfegislkpuzqylwcfnoc.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_ceNh3H1XvVzubJW7uKv3Rw_pujGphDu'; 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('❌ 缺少 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 環境變數，請參考 .env.local.example 設定。');
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -382,9 +386,11 @@ export default function Home() {
                             href={item.lineLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 text-center bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg transition shadow-sm flex items-center justify-center gap-1"
+                            aria-label="透過 LINE 詢問此物件"
+                            title="透過 LINE 詢問此物件"
+                            className="shrink-0 w-11 text-center border border-emerald-500 text-emerald-600 hover:bg-emerald-50 text-base font-bold py-2.5 rounded-lg transition flex items-center justify-center"
                           >
-                            <span>💬</span> LINE 諮詢
+                            💬
                           </a>
                         </div>
                       </div>
@@ -499,6 +505,17 @@ export default function Home() {
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-8 text-xs text-center">
         <p>© 2026 株式会社和日 (Kazuhi Co., Ltd.). All rights reserved.</p>
       </footer>
+
+      {/* 全站唯一固定詢問鈕：滾動至任何位置都能一鍵詢問官方 LINE */}
+      <a
+        href={OFFICIAL_LINE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="LINE 專人諮詢"
+        className="fixed bottom-5 right-5 z-40 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-lg shadow-emerald-900/30 w-14 h-14 flex items-center justify-center text-2xl transition hover:scale-105"
+      >
+        💬
+      </a>
     </div>
   );
 }
