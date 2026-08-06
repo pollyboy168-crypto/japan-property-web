@@ -62,11 +62,14 @@ async function fetchHtml(url) {
   return res.text();
 }
 
-async function collectDetailUrls() {
+async function collectDetailUrls(debug) {
   const urls = new Set();
 
   for (const listingUrl of LISTING_PAGES) {
     const html = await fetchHtml(listingUrl);
+    if (debug) {
+      debug.push({ url: listingUrl, htmlLength: html ? html.length : 0, sample: html ? html.slice(0, 300) : null });
+    }
     if (!html) continue;
 
     const matches = html.matchAll(/href="(\/pp3\/k\/osaka\/[a-z0-9-]+\/\d+\/re_[a-z0-9]+\/)"/gi);
@@ -193,8 +196,8 @@ async function upsertProperties(records) {
   }
 }
 
-async function runSync() {
-  const detailUrls = await collectDetailUrls();
+async function runSync(debugInfo) {
+  const detailUrls = await collectDetailUrls(debugInfo);
 
   const results = [];
   const BATCH = 5;
@@ -232,8 +235,9 @@ export async function POST(request) {
   }
 
   try {
-    const summary = await runSync();
-    return json({ ok: true, ...summary });
+    const debug = new URL(request.url).searchParams.has('debug') ? [] : null;
+    const summary = await runSync(debug);
+    return json({ ok: true, ...summary, debug });
   } catch (err) {
     console.error('❌ 物件同步失敗:', err);
     return json({ error: String(err) }, 500);
