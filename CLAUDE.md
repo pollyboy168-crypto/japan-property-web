@@ -254,6 +254,41 @@ n8n workflow `02_大阪熱門新聞每日蒐集`（id `AOLHRFIe7fBhCOQj`）的 C
 delete from news_posts where summary_zh like '【日本新聞】%';
 ```
 
+## 🏠 物件抓取已搬回本機執行（不要再放雲端）
+
+**兩個雲端平台的 IP 都被健美家擋了：**
+
+| 來源 | 結果 |
+|---|---|
+| Cloudflare Workers | F5 WAF 直接擋，`htmlLength: 0` |
+| n8n Cloud | **HTTP 429 Too Many Requests**（2026-08-07 實測，四個地區分頁全滅） |
+| **使用者本機 IP** | ✅ **全部 HTTP 200** |
+
+同一份程式碼、同一批網址，本機拿到 41 筆、n8n 拿到 0 筆。所以抓取改用
+`scripts/scrape-kenbiya.mjs` 在本機跑：
+
+```bash
+node scripts/scrape-kenbiya.mjs --dry    # 只抓不寫，看結果
+node scripts/scrape-kenbiya.mjs --all    # 跑完全部 54 個地區
+```
+
+需要環境變數 `SYNC_SECRET`（跟 Cloudflare 上那把一樣，`.env.local` 裡有）。
+2026-08-07 一次跑完拿到 **1014 筆**，缺價格 0、缺照片 0、地址殘留 0。
+
+n8n workflow 01 保留但排程改回**每天 10:00**——它現在只會 429 空轉，留著
+當作萬一健美家解除限流時的備援。**不要再把它調成每 30 分鐘**，那只會讓
+IP 一直待在限流名單裡。
+
+### 抓取端踩過的坑
+
+- **錯誤不要靜默吞掉。** 原本 `catch (e) {}` 把 429 吃掉，症狀變成「執行成功
+  但沒有新資料」，查了很久。現在會把錯誤收進 `errs` 一起回傳。
+- **HTTP Request 節點的 body 參數要切成 Expression 模式**。值寫對了但欄位
+  停在 Fixed 模式時，n8n 會把 `{{ $json.records }}` 當字面字串送出，API 回
+  「缺少 records 陣列」400。
+- 地址正規化：`ヶ丘`／`が丘` 要整組換成「丘」，**不能只把 `ヶ` 換成 `丘`**
+  （會變成「旭丘丘」）；`ー` 和 `－` 是破折號不是長音，要換成 `-`。
+
 ## 🚫 不要用 fetch 打 n8n 的 `/rest/*`——會把使用者踢登出
 
 **n8n 有 session 綁定 `browser-id` 的防劫持機制：請求帶的 browser-id 對不上，它不是回 401 就算了，而是直接撤銷整個 session。**
