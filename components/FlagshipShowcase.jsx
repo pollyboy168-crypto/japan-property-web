@@ -18,7 +18,9 @@ export default function FlagshipShowcase({ properties }) {
             👑 株式會社和日 直營旗艦物業
           </span>
           <h2 className="text-2xl sm:text-4xl font-extrabold mt-3">{flagship.title}</h2>
-          <p className="text-slate-400 text-sm mt-1">完美改建示範標的 ‧ 帶 365 天執照與現成營運團隊出售</p>
+          <p className="text-slate-400 text-sm mt-1">
+            {flagship.location} ‧ 完美改建示範標的 ‧ 帶 365 天執照與現成營運團隊出售
+          </p>
         </div>
         <div className="text-right bg-slate-800/90 p-4 rounded-2xl border border-amber-500/40">
           <span className="text-[11px] text-slate-400 block line-through decoration-slate-500">市場行情價 {formatPropertyPrice(flagship.marketPriceJPY, 'JPY')}</span>
@@ -51,6 +53,33 @@ export default function FlagshipShowcase({ properties }) {
             附帶成熟營運軟硬體！由日本在地經理團隊負責清潔、現場房客對應與多平台接單，買下即刻接手穩定現金流。
           </p>
         </div>
+      </div>
+
+      {/* 交通條：這棟在大正區、不是心齋橋那種蛋黃區，取得成本低是它的賣點，
+          但「便宜」要有說服力就得讓買家一眼看到移動時間其實沒差多少，
+          所以把站數直接攤在畫面上，而不是只寫在下面的說明文字裡。
+          站數都是實際查證過的（大正站→心齋橋為長堀鶴見綠地線 4 站直達）。 */}
+      <div className="bg-slate-800/60 p-6 rounded-2xl border border-slate-700/60 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🚉</span>
+          <h3 className="font-bold text-white">大正站雙鐵共構　JR 大阪環狀線 ✕ 大阪Metro長堀鶴見綠地線</h3>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { place: '京セラドーム大阪', detail: '地鐵 1 站' },
+            { place: '心齋橋', detail: '地鐵 4 站直達' },
+            { place: '難波', detail: '心齋橋轉乘 1 站' },
+            { place: '環球影城 USJ', detail: 'JR 西九条轉夢咲線' }
+          ].map((item) => (
+            <div key={item.place} className="bg-slate-900/60 rounded-xl px-3 py-3 border border-slate-700/50">
+              <div className="text-sm font-bold text-amber-400">{item.place}</div>
+              <div className="text-[11px] text-slate-300 mt-0.5">{item.detail}</div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          取得成本明顯低於心齋橋、難波等蛋黃區，但住客實際的移動時間差異不大。對「行李少走路、換車次數少」的家庭客與團體客來說，雙鐵共構往往比地段名氣更有吸引力。
+        </p>
       </div>
 
       <div className="pt-2 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-800/50 p-6 rounded-2xl border border-slate-800">

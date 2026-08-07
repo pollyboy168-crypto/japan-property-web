@@ -14,7 +14,7 @@ export default function RenovationCaseStudy() {
           <div className="text-blue-600 font-bold text-sm">步驟 01 ‧ 精準選址與結構評估</div>
           <h3 className="font-bold text-slate-900">獨棟 S 造/鋼構大樓篩選</h3>
           <p className="text-xs text-slate-600 leading-relaxed">
-            挑選位於心齋橋、難波等高觀光流量區域，且建物構造具備特區民泊申請資格的獨棟建築。
+            鎖定能快速抵達心齋橋、難波、環球影城等觀光熱點的交通節點——不必是蛋黃區，取得成本更低但住客移動時間差異不大——且建物構造具備特區民泊申請資格的獨棟建築。
           </p>
         </div>
 
