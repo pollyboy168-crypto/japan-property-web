@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { companyInfo, OFFICIAL_LINE_URL } from '@/lib/constants';
+import SellPropertyModal from '@/components/SellPropertyModal';
 
 export default function SiteHeader({ propertiesCount, currency, setCurrency }) {
   return (
@@ -8,11 +9,14 @@ export default function SiteHeader({ propertiesCount, currency, setCurrency }) {
         <div className="flex items-center gap-3">
           <span className="text-2xl">🏯</span>
           <div>
+            {/* 站名用品牌「和日大阪房產」而不是法人名——法人名對台灣買家
+                看不出這站在賣什麼，品牌名內含「大阪房產」才搜得到也記得住。
+                法人名移到副標，維持可信度（我們是日本在地合法登記法人）。 */}
             <span className="font-extrabold text-lg sm:text-xl tracking-tight text-slate-900 block leading-none">
-              {companyInfo.jpCompanyName}
+              {companyInfo.siteName}
             </span>
             <span className="text-[10px] text-slate-400 font-medium tracking-wider">
-              {companyInfo.jpCompanyEn} ｜ 大阪賭場與資產管理專家
+              {companyInfo.jpCompanyName} ｜ {companyInfo.siteTagline}
             </span>
           </div>
         </div>
@@ -24,6 +28,7 @@ export default function SiteHeader({ propertiesCount, currency, setCurrency }) {
           <a href="#properties" className="hover:text-blue-600 transition">精選物件 ({propertiesCount})</a>
           <Link href="/news" className="hover:text-blue-600 transition">熱門新聞</Link>
           <Link href="/blog" className="hover:text-blue-600 transition">日本房產新訊</Link>
+          <SellPropertyModal variant="nav" />
         </nav>
 
         <div className="flex items-center gap-3">

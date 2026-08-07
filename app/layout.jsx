@@ -1,11 +1,13 @@
 import './globals.css';
-import { companyInfo } from '@/lib/constants';
+import { companyInfo, SITE_NAME, SITE_NAME_EN, SITE_TAGLINE } from '@/lib/constants';
 import { PRIMARY_KEYWORDS, FAQ_ITEMS } from '@/lib/seoKeywords';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
 
 const SITE_URL = 'https://japan.her-yow.com';
 
-const TITLE = '日本買房・大阪不動產投資｜台灣人置產與民泊代管一站式顧問｜株式会社和日';
+// 標題結構是「核心關鍵字｜差異化賣點｜品牌」。品牌放最後是刻意的：
+// Google 常會截斷過長的標題，截尾比截頭好，前面的關鍵字才是要被搜到的。
+const TITLE = '大阪房產投資・台灣人日本買房置產｜特區民泊 365 天合法營運｜和日大阪房產';
 const DESCRIPTION =
   '台灣人買日本房產的一站式顧問：大阪收益物件即時上架、特區民泊 365 天牌照解析、投報率試算、貸款與稅費規劃、購入後包租代管。株式会社和日為日本在地合法登記法人，提供從選物件、改建到營運出場的完整服務。';
 
@@ -13,7 +15,7 @@ export const metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: TITLE,
-    template: '%s｜株式会社和日'
+    template: `%s｜${SITE_NAME}`
   },
   description: DESCRIPTION,
   keywords: PRIMARY_KEYWORDS,
@@ -22,7 +24,7 @@ export const metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: SITE_URL,
-    siteName: '株式会社和日 Kazuhi Co., Ltd.',
+    siteName: `${SITE_NAME}（${companyInfo.jpCompanyName}）`,
     locale: 'zh_TW',
     type: 'website'
   },
@@ -50,6 +52,7 @@ const jsonLdGraph = {
       '@type': 'RealEstateAgent',
       '@id': `${SITE_URL}/#organization`,
       name: companyInfo.jpCompanyName,
+      alternateName: [SITE_NAME, SITE_NAME_EN],
       legalName: companyInfo.jpCompanyEn,
       url: SITE_URL,
       email: companyInfo.email,
@@ -70,7 +73,9 @@ const jsonLdGraph = {
       '@type': 'WebSite',
       '@id': `${SITE_URL}/#website`,
       url: SITE_URL,
-      name: '株式会社和日 日本房產投資平台',
+      name: SITE_NAME,
+      alternateName: SITE_NAME_EN,
+      description: SITE_TAGLINE,
       inLanguage: 'zh-TW',
       publisher: { '@id': `${SITE_URL}/#organization` }
     },

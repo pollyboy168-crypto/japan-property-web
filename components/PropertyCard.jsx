@@ -32,7 +32,16 @@ export default function PropertyCard({ item, priceLabel, marketPriceLabel, onVie
       {/* 物件內文區 */}
       <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
         <div className="space-y-2">
-          <span className="text-xs text-blue-600 font-semibold">📍 {item.location} ‧ {item.structure}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-blue-600 font-semibold">📍 {item.location} ‧ {item.structure}</span>
+            {/* 屋主直售／和日直營的物件標出來——買家最在意的就是「能不能直接談」，
+                跟從平台抓來的公開資料是完全不同的性質，不標會混在一起。 */}
+            {item.ownerDirect && (
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                {item.sourceLabel}
+              </span>
+            )}
+          </div>
           <h3 className="font-bold text-base text-slate-900 leading-snug line-clamp-1">{item.title}</h3>
 
           {/* 智慧動態描述 */}

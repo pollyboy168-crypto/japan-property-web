@@ -12,6 +12,7 @@ import PropertyFilterBar from '@/components/PropertyFilterBar';
 import PropertyGrid from '@/components/PropertyGrid';
 import NewsRail from '@/components/NewsRail';
 import ContactCta from '@/components/ContactCta';
+import SellPropertyCta from '@/components/SellPropertyCta';
 import GalleryModal from '@/components/GalleryModal';
 import SiteFooter from '@/components/SiteFooter';
 import LineFab from '@/components/LineFab';
@@ -139,6 +140,8 @@ export default function Home() {
             onToggleFavorite={handleFavoriteToggled}
           />
         </div>
+
+        <SellPropertyCta />
 
         <RenovationCaseStudy />
 

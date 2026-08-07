@@ -254,6 +254,34 @@ n8n workflow `02_大阪熱門新聞每日蒐集`（id `AOLHRFIe7fBhCOQj`）的 C
 delete from news_posts where summary_zh like '【日本新聞】%';
 ```
 
+## 🏷️ 網站品牌名稱
+
+站名是 **「和日大阪房產」**（`SITE_NAME`，定義在 `lib/constants.js`），法人名「株式会社和日」降為副標。
+
+原本站名直接用法人名，兩個問題：「和日」太泛用、搜尋競爭者一堆排不到；日文法人名對台灣買家也看不出這站在賣什麼。但**不能反過來把站名塞成關鍵字**——Google 的「網站名稱」功能要的是品牌，判定成關鍵字堆疊會直接忽略我們的宣告、自己挑一個顯示。所以取「品牌 + 真實關鍵字」的折衷：保留和日（法人與網域的連結），內含「大阪房產」這個會被搜尋的字。
+
+改站名時要一起改的地方：`lib/constants.js` 的 `SITE_NAME` / `SITE_NAME_EN` / `SITE_TAGLINE`、`app/layout.jsx` 的 `TITLE`。`SiteHeader` 與 JSON-LD 都是讀 constants，不用另外改。
+
+## 🏠 屋主刊登出售
+
+- 表單：`components/SellPropertyModal.jsx`（Header 導覽列 + 首頁 `SellPropertyCta` 區塊兩個入口）
+- API：`app/api/list-property/route.js`
+- 資料表：`supabase/property_submissions.sql`（**待審核表，需手動執行建立**）
+
+**屋主送出的內容不會直接上架。** properties 是對外顯示的資料，而屋主投稿的價格、地址、產權狀況都未經查證，房地產金額高，未審核就公開會有實質誤導買家的風險——所以先進 `property_submissions`，人工確認後再轉進 `properties`（id 用 `OWNER-` 前綴）。
+
+**降級路徑**：`property_submissions` 還沒建好時，API 會把資料塞進 `message` 改寫進 `leads`。這是刻意的——屋主看到「送出失敗」不會再送第二次，我們就永久失去這個賣方，寧可先接到人。表建好後會自動走正常路徑，不用改程式。
+
+### 物件出處標記（`describeSource()` in `lib/properties.js`）
+
+| id 前綴 | 標籤 | 外部連結 |
+|---|---|---|
+| `OWNER-` | 屋主直售 | 無（本來就不存在於別的平台，硬給連結會誤導） |
+| `prop-` | 和日直營 | 無 |
+| 其他（`KENBIYA-` 等） | 合作平台公開資料 | 有原始頁面可查證 |
+
+`ownerDirect` 為 true 時，`PropertyCard` 會顯示綠色標記。買家最在意「能不能直接談」，這跟抓來的公開資料是完全不同的性質，不標會混在一起。
+
 ## 🔒 `public/google9c0989f68118f6d0.html` 絕對不要刪
 
 這是 Google Search Console 的擁有權驗證檔（2026-08-07 加入），內容只有一行：
