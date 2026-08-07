@@ -254,6 +254,26 @@ n8n workflow `02_大阪熱門新聞每日蒐集`（id `AOLHRFIe7fBhCOQj`）的 C
 delete from news_posts where summary_zh like '【日本新聞】%';
 ```
 
+## 🚫 不要用 fetch 打 n8n 的 `/rest/*`——會把使用者踢登出
+
+**n8n 有 session 綁定 `browser-id` 的防劫持機制：請求帶的 browser-id 對不上，它不是回 401 就算了，而是直接撤銷整個 session。**
+
+2026-08-07 踩到的實況：使用者連續登入三次都「馬上又變成未登入」，一度以為是 Chrome 設定檔或 cookie 設定問題，查了半天。真相是**每次我用 `fetch('/rest/workflows')` 探測登入狀態，就把剛建立的 session 作廢一次**——我自己就是那個把他踢下線的人。
+
+決定性證據（同一次頁面載入）：
+
+| 發出者 | 端點 | 結果 |
+|---|---|---|
+| n8n 自己的前端 | `/rest/workflows/TsyPpjdTx4eTi6z5` | **200** |
+| n8n 自己的前端 | `/rest/workflows?includeScopes=true…` | **200** |
+| 我注入的 `fetch()` | `/rest/workflows` | **401** → 接著整站跳 `/signin` |
+
+從 `localStorage` 取 `n8n-browserId` 塞進 `browser-id` header 也沒用，一樣 401。
+
+**所以要改 n8n 的 workflow，只能用 UI 操作**（開節點 → CodeMirror `view.dispatch` 換程式碼 → 真實鍵盤事件同步 Vue model → Ctrl+S 存檔），不要走 REST。相關的 CodeMirror 操作細節見本檔其他章節。
+
+（先前那些「n8n Cloud REST 限流、fetch 無限 pending」的推測是錯的，真正原因就是這個。）
+
 ## 🛠️ Supabase 後台畫面壞掉時，怎麼執行 SQL
 
 **Supabase Dashboard 的畫面在這台機器上渲染不出來**（2026-08-07）：所有 JS 資產都 200、client-side 路由正常運作、`localStorage` 裡的 `supabase.dashboard.auth.token` 也在（登入狀態有效），但 React 只 render 出 2 個 div、`textContent` 只有那段內建的佈景主題偵測 script，完全沒有呼叫 `api.supabase.com`。SQL Editor 的 Monaco 因此永遠載入不出來。
