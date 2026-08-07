@@ -35,6 +35,26 @@ function isValidRecord(r) {
   );
 }
 
+// 抓回來的地址欄位常常夾帶版面殘留物——健美家詳情頁的地址後面接著一個
+// 「地図」連結，regex 抓下來會變成
+//   "大阪府大阪市中央区南船場1-3-21\r\n      \r\n        \r\n        地図"
+// 直接顯示在物件卡上很難看。另外日式漢字（区／ノ）也在這裡一併正規化成
+// 台灣讀者習慣的寫法，讓資料庫裡存的就已經是可直接顯示的內容。
+function cleanLocation(loc) {
+  if (typeof loc !== 'string') return loc;
+  return loc
+    .split(/[\r\n]/)[0] // 地址本體只在第一行，後面都是版面殘留
+    .replace(/地図/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/区/g, '區')
+    .replace(/ノ/g, '之');
+}
+
+function normalizeRecord(r) {
+  return r.location ? { ...r, location: cleanLocation(r.location) } : r;
+}
+
 async function upsertProperties(records) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -83,7 +103,7 @@ export async function POST(request) {
     return json({ error: '缺少 records 陣列' }, 400);
   }
 
-  const valid = incoming.filter(isValidRecord);
+  const valid = incoming.filter(isValidRecord).map(normalizeRecord);
   const invalid = incoming.length - valid.length;
 
   try {
