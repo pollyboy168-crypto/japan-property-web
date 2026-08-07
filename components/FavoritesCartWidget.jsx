@@ -21,15 +21,15 @@ export default function FavoritesCartWidget({ properties, favorites, currency, o
 
   return (
     <>
+      {/* 收藏浮動鈕：藥丸型（愛心＋數字並排），比「圓鈕外掛一個小圓框徽章」
+          乾淨——徽章疊在圓鈕邊緣時邊框會跟按鈕陰影打架，視覺上很雜。 */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-44 right-5 z-40 w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-400 text-white shadow-lg flex items-center justify-center transition"
-        aria-label="查看收藏清單"
+        className="fixed bottom-44 right-5 z-40 h-12 pl-4 pr-3 rounded-full bg-amber-500 hover:bg-amber-400 text-white shadow-lg hover:shadow-xl flex items-center gap-2 transition-all"
+        aria-label={`查看收藏清單，目前有 ${favorites.length} 筆`}
       >
-        <span className="text-2xl">❤️</span>
-        <span className="absolute -top-1 -right-1 bg-white text-amber-600 text-xs font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-amber-500">
-          {favorites.length}
-        </span>
+        <span className="text-xl leading-none">❤️</span>
+        <span className="text-sm font-bold tabular-nums leading-none">{favorites.length}</span>
       </button>
 
       {open && (

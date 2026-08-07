@@ -29,6 +29,20 @@ function withReferralParams(rawUrl) {
   }
 }
 
+// 從來源網址取出 YouTube 影片 ID，取不到就回 null（代表這筆不是可嵌入的影片）。
+//
+// 注意：Google 新聞 RSS 給的是 news.google.com/rss/articles/CBM... 這種轉址網址，
+// 真正的目的地藏在 JS 後面，抓不出影片 ID，所以那種連結一律嵌不了、只能給外連按鈕。
+// n8n 的新聞流程因此改成直接查 YouTube 拿到真正的 watch 網址（見 CLAUDE.md），
+// 舊資料仍是轉址網址，這裡回 null 讓畫面自動退回「觀看完整影片」外連按鈕。
+function getYouTubeId(rawUrl) {
+  if (!rawUrl) return null;
+  const m = String(rawUrl).match(
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/
+  );
+  return m ? m[1] : null;
+}
+
 export async function generateMetadata({ params }) {
   const item = await getNewsBySlug(params.slug);
 
@@ -62,20 +76,35 @@ export default async function NewsDetailPage({ params }) {
   }
 
   const url = `${SITE_URL}/news/${encodeURIComponent(item.slug)}`;
-  const isVideoItem = item.category === '影片' || item.source_name === 'YouTube';
+  const videoId = getYouTubeId(item.source_url);
+  const isVideoItem = Boolean(videoId) || item.category === '影片' || item.source_name === 'YouTube';
 
   // 這裡刻意不整篇轉載來源新聞內容，只放我們自己寫的簡短引言＋連回原始
   // 來源，避免版權疑慮（見 lib/news.js／app/api/sync-news/route.js 的說明）。
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'NewsArticle',
-    headline: item.title,
-    description: item.summary_zh,
-    url,
-    image: item.image_url ? [item.image_url] : undefined,
-    datePublished: item.published_at,
-    publisher: { '@type': 'Organization', name: companyInfo.jpCompanyName }
-  };
+  // 影片改用 VideoObject——Google 對影片有獨立的搜尋結果版位（縮圖＋可播放
+  // 標記），標成 NewsArticle 就拿不到，這對導流差很多。
+  const jsonLd = videoId
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'VideoObject',
+        name: item.title,
+        description: item.summary_zh,
+        thumbnailUrl: [`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`],
+        uploadDate: item.published_at,
+        embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
+        url,
+        publisher: { '@type': 'Organization', name: companyInfo.jpCompanyName }
+      }
+    : {
+        '@context': 'https://schema.org',
+        '@type': 'NewsArticle',
+        headline: item.title,
+        description: item.summary_zh,
+        url,
+        image: item.image_url ? [item.image_url] : undefined,
+        datePublished: item.published_at,
+        publisher: { '@type': 'Organization', name: companyInfo.jpCompanyName }
+      };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
@@ -112,10 +141,25 @@ export default async function NewsDetailPage({ params }) {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-snug">{item.title}</h1>
         </div>
 
-        {item.image_url && (
-          <div className="h-64 sm:h-80 rounded-xl overflow-hidden bg-slate-100">
-            <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+        {/* 影片就直接在站內播，不要把人踢去 YouTube——留在站上才有機會看到下面的
+            物件 CTA。用 youtube-nocookie 網域，觀眾沒按播放前不會被種追蹤 cookie。 */}
+        {videoId ? (
+          <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ paddingTop: '56.25%' }}>
+            <iframe
+              className="absolute inset-0 w-full h-full"
+              src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0`}
+              title={item.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
           </div>
+        ) : (
+          item.image_url && (
+            <div className="h-64 sm:h-80 rounded-xl overflow-hidden bg-slate-100">
+              <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+            </div>
+          )
         )}
 
         <article className="space-y-4 text-sm text-slate-700 leading-relaxed">
@@ -128,7 +172,7 @@ export default async function NewsDetailPage({ params }) {
           rel="noopener noreferrer"
           className="block text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition"
         >
-          {isVideoItem ? '▶️ 觀看完整影片' : '📰 閱讀原文'}（{item.source_name}）→
+          {videoId ? '▶️ 到 YouTube 觀看' : isVideoItem ? '▶️ 觀看完整影片' : '📰 閱讀原文'}（{item.source_name}）→
         </a>
 
         <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-6 sm:p-8 text-center space-y-4">

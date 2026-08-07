@@ -7,6 +7,7 @@ import HeroBanner from '@/components/HeroBanner';
 import WhyOsaka from '@/components/WhyOsaka';
 import FlagshipShowcase from '@/components/FlagshipShowcase';
 import RenovationCaseStudy from '@/components/RenovationCaseStudy';
+import FaqSection from '@/components/FaqSection';
 import PropertyFilterBar from '@/components/PropertyFilterBar';
 import PropertyGrid from '@/components/PropertyGrid';
 import NewsRail from '@/components/NewsRail';
@@ -140,6 +141,8 @@ export default function Home() {
         </div>
 
         <RenovationCaseStudy />
+
+        <FaqSection />
 
         <NewsRail news={news} />
 

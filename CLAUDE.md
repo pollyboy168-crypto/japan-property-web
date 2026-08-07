@@ -213,7 +213,51 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 - ✅ **Phase 4（2026-08-06）**：`leads` 資料表＋RLS、`app/api/leads/route.js`、`LeadFormModal.jsx`（首頁浮動按鈕＋物件詳情頁）、GA4（`GoogleAnalytics.jsx` + 三個自訂事件）、Resend Email 通知。細節見上方「留名單與訪客追蹤流程」一節。順帶發現 `properties` 表 RLS 未啟用，記錄在「資安基本盤」待處理。
 - ✅ **Phase 5（2026-08-07）**：n8n 物件資料抓取管線修復——原本是對來源網站列表頁做 regex 抓取、抓不到就假造 20 筆湊數，改成鎖定健美家(Kenbiya)大阪收益物件，抓真實詳情頁的標題／價格／利回り／地址／照片／文案，抓不到就跳過不硬湊。抓取／解析邏輯放在 n8n（因為 Cloudflare Workers 的 IP 會被來源網站的反爬蟲擋下，n8n 的 IP 不會），新增 `app/api/sync-properties/route.js` 只負責驗證＋寫入 Supabase。細節見上方「物件資料同步流程」一節。**待處理**：舊的 413 筆假資料還沒清掉，跟新資料並存顯示中。
 
+- ✅ **Phase 6.2（2026-08-07）**：SEO 關鍵字工程、日文內容翻譯、YouTube 站內嵌入播放。細節見下方三節。
+
 每完成一個 Phase 都會回來更新本文件對應章節，不要假設這裡列的「⬜ 尚未開始」永遠正確——實作前先確認一下對應的檔案是否已經存在。
+
+## SEO 關鍵字（`lib/seoKeywords.js`，2026-08-07 Phase 6.2）
+
+台灣買家會搜尋的 100 組關鍵字，分成 10 類各 10 組（通用／大阪在地／民泊／投報／法規稅務／世博 IR 題材／物件型態／行政區／比較型／意圖型），另外導出：
+
+- `PRIMARY_KEYWORDS`：10 組核心字，只有這組會進 `app/layout.jsx` 的 `metadata.keywords`。
+- `FAQ_ITEMS`：8 組有實際資訊量的問答，同時被 `components/FaqSection.jsx` 渲染成畫面上的常見問題，以及 `app/layout.jsx` 的 `FAQPage` JSON-LD。
+
+**這個檔案不是拿來做關鍵字堆砌的**。100 組字的用途是「決定我們該寫哪些內容、頁面標題怎麼下」，Google 從 2010 年代就會懲罰把關鍵字硬塞進頁面的做法，`metadata.keywords` 本身現代搜尋引擎也早就不採信了。真正有效的是 FAQ 這種對應長尾問句、答案有內容的區塊——所以 `FAQ_ITEMS` 的答案請維持是真的能回答問題的文字，不要為了塞字改爛它。
+
+## 物件日文內容翻譯（2026-08-07 Phase 6.2）
+
+健美家來源的標題與說明都是日文原文，對台灣買家可讀性很差。翻譯分兩條路線，寫在 `lib/jpGlossary.js` 與 `app/api/translate-properties/route.js`：
+
+- **標題走查表（`jpToZh()`），不走機器翻譯**。Google 翻譯在健美家那種「術語＋價格數字」的短標題上錯得很難看，實測踩過：`45290万円` → 「4,529 億天」（價格被改掉，這是會誤導買家的錯誤）、`健美家` → 「Kenbi-ya」、`満想5.28％` → 「滿意度5.28%」。查表的結果可預測、數字絕對不會被動到。只有查完仍有假名殘留（多半是大樓專名，例如「ラフォーレ」）才退回機器翻譯。
+- **說明走機器翻譯**，長篇自由文章查表撐不住，但譯完會再過一次同一份查表校正術語。
+- 查表順序**一定要長詞優先**（`lib/jpGlossary.js` 會自動依長度排序）。否則「築」會先把「新築／年築」吃掉，`1997年築` 變成 `1997年年建`。
+- 已翻譯的資料列用 `description_zh` 開頭的 `［繁中翻譯］` 標記，避免重複翻譯；標題保留 `【健美家】` 來源前綴，翻譯前要先剝掉、翻完再補回去。
+
+## 新聞與 YouTube 影片（2026-08-07 Phase 6.2 改版）
+
+n8n workflow `02_大阪熱門新聞每日蒐集`（id `AOLHRFIe7fBhCOQj`）的 Code 節點負責抓取＋整理，下游 HTTP Request 節點才 POST 到 `/api/sync-news`（Code 節點最後回 `[{json:{records}}]`，**不要在 Code 節點裡自己 POST，會變成送兩次**）。
+
+- **圖文新聞**：Google 新聞 RSS 台灣版（`hl=zh-TW&gl=TW&ceid=TW:zh-Hant`），依查詢分類成 不動產／民泊／投資／觀光旅遊。
+- **影片：直接查 YouTube 搜尋頁，不走 Google 新聞 RSS，也不需要 YouTube Data API 金鑰。** Google 新聞 RSS 的 `<link>` 是 `news.google.com/rss/articles/CBM...` 轉址網址，真正的目的地藏在 JS 後面（實測抓 HTML 完全解不出目標網址），拿不到影片 ID 就沒辦法嵌入播放。改成抓 `youtube.com/results?search_query=...&sp=EgQIBRAB&hl=zh-TW&gl=TW`，從 HTML 裡的 `var ytInitialData = {...}` 遞迴撈出所有 `videoRenderer`，取得真正的 `videoId`，存成 `https://www.youtube.com/watch?v=<id>`。
+- 影片的 slug 一律是 `yt-<videoId>`，同一支影片在不同查詢重複出現會自然收斂成同一筆，標題改了也不會變成新的一筆。
+- 前端 `app/news/[slug]/page.jsx` 的 `getYouTubeId()` 從 `source_url` 取出影片 ID，有就用 `youtube-nocookie.com` 嵌 iframe 播放（順帶把 JSON-LD 從 `NewsArticle` 換成 `VideoObject`，爭取 Google 的影片搜尋版位），取不到就退回「觀看完整影片」外連按鈕——**舊資料是轉址網址，本來就嵌不了，這個 fallback 不是 bug**。
+- 嵌入 iframe 需要 CSP 的 `frame-src`，已在 `public/_headers` 加 `https://www.youtube-nocookie.com`／`https://www.youtube.com`。
+- 日文原文新聞用「標題含假名」判斷擋掉（繁體中文不會有假名），在 n8n 抓取端就先過濾，不要等進了資料庫才處理。
+
+### ⚠️ `news_posts` 舊日文資料還沒清掉
+
+資料庫裡還有 15 筆 `summary_zh` 開頭是 `【日本新聞】` 的舊日文新聞。`lib/news.js` 有應用層過濾，網站上**看不到**這 15 筆，但資料還在。`news_posts` 的 RLS **沒有 DELETE policy**，anon key 刪不動（PostgREST 會回 204 但實際刪 0 筆，看起來成功其實沒刪），要清必須到 Supabase SQL Editor 用 postgres role 執行：
+
+```sql
+delete from news_posts where summary_zh like '【日本新聞】%';
+```
+
+## n8n 排程與方案限制（2026-08-07）
+
+- 兩個 workflow 的 Schedule Trigger 都已設成**每天 10:00（workflow settings 的 timezone 設為 `Asia/Taipei`）**。原本是空的 `interval: [{}]`，那在 n8n 代表「每小時」，會白白燒掉執行額度。
+- **n8n Cloud 目前是試用方案**（2026-08-07 當下顯示剩 12 天、1000 次執行額度）。試用到期後這兩條每日排程會停掉，物件與新聞就不會再更新——到期前要提醒使用者決定是否付費升級。
 
 ## 樣式
 
