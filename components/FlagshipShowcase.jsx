@@ -11,7 +11,7 @@ export default function FlagshipShowcase({ properties }) {
   if (!flagship) return null;
 
   return (
-    <section id="flagship" className="scroll-mt-20 bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 text-white rounded-3xl p-8 sm:p-12 border border-amber-500/30 shadow-2xl space-y-8">
+    <section id="flagship" className="scroll-mt-20 bg-slate-900 text-white rounded-3xl p-8 sm:p-12 border border-amber-500/40 shadow-2xl space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
         <div>
           <span className="bg-amber-500 text-slate-900 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">

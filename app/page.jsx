@@ -45,10 +45,11 @@ export default function Home() {
   const [maxPrice, setMaxPrice] = useState('');
 
   // ----------------------------------------------------------------
-  // ❤ 收藏清單 State（localStorage，訪客個人紀錄，非登入帳號）
+  // ❤ 收藏清單 State（localStorage，訪客個人紀錄，非登入帳號）。
+  // 檢視收藏清單唯一入口是右下角浮動的 FavoritesCartWidget，物件牆本身
+  // 不再提供「只看收藏」篩選開關。
   // ----------------------------------------------------------------
   const [favorites, setFavorites] = useState([]);
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   useEffect(() => {
     getAllProperties()
@@ -62,18 +63,11 @@ export default function Home() {
     setFavorites(getFavorites());
   };
 
-  const handleToggleFavoritesOnly = () => {
-    setShowFavoritesOnly((prev) => !prev);
-    setVisibleCount(ITEMS_PER_BATCH);
-  };
-
   // ----------------------------------------------------------------
   // 🔍 篩選邏輯：關鍵字（標題/地點）、區域、總價上限
   // ----------------------------------------------------------------
   const filteredProperties = useMemo(() => {
-    let list = showFavoritesOnly
-      ? properties.filter((item) => favorites.includes(item.id))
-      : properties;
+    let list = properties;
 
     if (keyword.trim()) {
       const kw = keyword.trim().toLowerCase();
@@ -89,7 +83,7 @@ export default function Home() {
     }
 
     return list;
-  }, [properties, favorites, showFavoritesOnly, keyword, region, maxPrice]);
+  }, [properties, keyword, region, maxPrice]);
 
   useEffect(() => {
     setVisibleCount(ITEMS_PER_BATCH);
@@ -108,7 +102,7 @@ export default function Home() {
 
       <HeroBanner />
 
-      {/* 主內容區 */}
+      {/* 主內容區：客人進來先看房子，新聞區塊挪到房源之後 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
         <WhyOsaka />
 
@@ -120,8 +114,6 @@ export default function Home() {
         </section>
 
         <RecentlyViewedRail properties={properties} currency={currency} />
-
-        <NewsRail news={news} />
 
         <div className="space-y-4">
           <PropertyFilterBar
@@ -144,13 +136,12 @@ export default function Home() {
             currency={currency}
             onViewGallery={setActiveGallery}
             onToggleFavorite={handleFavoriteToggled}
-            favoritesCount={favorites.length}
-            showFavoritesOnly={showFavoritesOnly}
-            onToggleFavoritesOnly={handleToggleFavoritesOnly}
           />
         </div>
 
         <RenovationCaseStudy />
+
+        <NewsRail news={news} />
 
         <ContactCta />
       </main>

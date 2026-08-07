@@ -5,9 +5,8 @@ import Link from 'next/link';
 import { formatPropertyPrice } from '@/lib/constants';
 import { toggleFavorite } from '@/lib/clientStorage';
 
-// 購物車式收藏清單：浮動按鈕顯示收藏數量，點擊展開清單面板。
-// 跟 PropertyGrid 頂部的「只看收藏」篩選鈕是兩種互補的入口——篩選鈕是
-// 「留在物件牆上只看收藏的」，這個是「隨時彈出來看清單、不用捲到物件牆」。
+// 收藏清單浮動按鈕：顯示收藏數量，點擊展開清單面板。
+// 是全站唯一的收藏檢視入口（PropertyGrid 不再另外提供「只看收藏」切換鈕）。
 export default function FavoritesCartWidget({ properties, favorites, currency, onFavoritesChanged }) {
   const [open, setOpen] = useState(false);
 
@@ -24,11 +23,11 @@ export default function FavoritesCartWidget({ properties, favorites, currency, o
     <>
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-44 right-5 z-40 w-14 h-14 rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow-lg flex items-center justify-center transition"
+        className="fixed bottom-44 right-5 z-40 w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-400 text-white shadow-lg flex items-center justify-center transition"
         aria-label="查看收藏清單"
       >
-        <span className="text-2xl">🛒</span>
-        <span className="absolute -top-1 -right-1 bg-white text-rose-600 text-xs font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-rose-500">
+        <span className="text-2xl">❤️</span>
+        <span className="absolute -top-1 -right-1 bg-white text-amber-600 text-xs font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-amber-500">
           {favorites.length}
         </span>
       </button>
@@ -74,7 +73,7 @@ export default function FavoritesCartWidget({ properties, favorites, currency, o
                     </div>
                     <button
                       onClick={() => handleRemove(item.id)}
-                      className="text-slate-300 hover:text-rose-500 shrink-0"
+                      className="text-slate-300 hover:text-amber-500 shrink-0"
                       aria-label="移除收藏"
                     >
                       ✕
