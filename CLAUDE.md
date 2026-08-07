@@ -254,6 +254,39 @@ n8n workflow `02_大阪熱門新聞每日蒐集`（id `AOLHRFIe7fBhCOQj`）的 C
 delete from news_posts where summary_zh like '【日本新聞】%';
 ```
 
+## ⚠️ slug / 網址路徑一律只能用 ASCII
+
+**Cloudflare Pages 的路由層會讓含非 ASCII 字元的路徑一律回 404。** 2026-08-07 實測：
+
+| 網址 | 結果 |
+|---|---|
+| `/news/大阪地產黃金期-李丹翔-東周刊`（百分比編碼） | 404 |
+| 同上，雙重編碼 | 404 |
+| `/news/yt-UXdm2ryZU4I` | 200 |
+
+請求根本到不了我們的程式碼，所以**應用層修不了**（`decodeURIComponent` 之類的都沒用），唯一解是不要產生這種 slug。
+
+當時的實際災情：n8n 新聞流程用中文標題組 slug，造成 sitemap 的 114 個網址裡有 **38 個是 404**，而且正好是要提交 Google Search Console 的前一刻——sitemap 塞一堆 404 會嚴重傷害索引信任度。
+
+現在的處置：
+
+- **n8n 新聞流程**：`slugify()` 改成從來源網址取 Google 新聞的 ASCII 文章 id（`/articles/<id>` → `news-<id 前 28 碼小寫>`），影片維持 `yt-<videoId>`。**不要再用標題組 slug。**
+- **`lib/news.js`**：`isReachable()` 濾掉非 ASCII slug 的資料列，讓它們不會出現在畫面與 sitemap。
+- 中文 slug 對 SEO 也沒有好處——Google 判斷主題靠的是 `<title>`、`<h1>` 與內文，不是網址裡的關鍵字。
+
+### 🔒 news_posts 的 RLS 只有 INSERT + SELECT
+
+**沒有 UPDATE policy，也沒有 DELETE policy。** 用 anon key 送 `PATCH`／`DELETE` 到 PostgREST 會回 **204 成功、但實際影響 0 筆**（靜默失敗，很容易誤判成功）。這就是為什麼那 38 筆中文 slug 只能用應用層濾掉、不能直接改。
+
+要真正清掉，得到 Supabase SQL Editor 用 postgres role 執行：
+
+```sql
+-- 15 筆舊日文新聞
+delete from news_posts where summary_zh like '【日本新聞】%';
+-- 38 筆中文 slug（在 Cloudflare 上一定 404）
+delete from news_posts where slug ~ '[^\x00-\x7F]';
+```
+
 ## n8n 排程與方案限制（2026-08-07）
 
 - Schedule Trigger 的 timezone 設在 workflow settings，兩條都是 `Asia/Taipei`。原本是空的 `interval: [{}]`，那在 n8n 代表「每小時」，會白白燒掉執行額度。
