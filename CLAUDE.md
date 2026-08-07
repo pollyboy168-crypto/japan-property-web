@@ -254,6 +254,34 @@ n8n workflow `02_大阪熱門新聞每日蒐集`（id `AOLHRFIe7fBhCOQj`）的 C
 delete from news_posts where summary_zh like '【日本新聞】%';
 ```
 
+## 🛠️ Supabase 後台畫面壞掉時，怎麼執行 SQL
+
+**Supabase Dashboard 的畫面在這台機器上渲染不出來**（2026-08-07）：所有 JS 資產都 200、client-side 路由正常運作、`localStorage` 裡的 `supabase.dashboard.auth.token` 也在（登入狀態有效），但 React 只 render 出 2 個 div、`textContent` 只有那段內建的佈景主題偵測 script，完全沒有呼叫 `api.supabase.com`。SQL Editor 的 Monaco 因此永遠載入不出來。
+
+**繞過方式：直接打 Management API。** 在 Supabase Dashboard 的分頁上執行：
+
+```js
+const tok = JSON.parse(localStorage.getItem('supabase.dashboard.auth.token')).access_token;
+await fetch('https://api.supabase.com/v1/projects/<PROJECT_REF>/database/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+  body: JSON.stringify({ query: 'select count(*) from news_posts' })
+});
+```
+
+這條路以 postgres 權限執行，可以做 DDL（建表、RLS policy），成功回 **201**。
+
+踩過的錯誤路徑，不要再試：
+
+| 端點 | 結果 |
+|---|---|
+| `/api/pg-meta/{ref}/query`（同源） | 404，dashboard 的 API 不在同源 |
+| `/platform/pg-meta/{ref}/query` + `x-connection-encrypted` | 500 `failed to get upstream connection details` |
+| `/platform/pg-meta/{ref}/query` 不帶 header | 500 `Cannot call proxy query without connection string` |
+| **`/v1/projects/{ref}/database/query`** | ✅ **201** |
+
+`property_submissions` 這張表就是用這個方式建立的。
+
 ## 🏷️ 網站品牌名稱
 
 站名是 **「和日大阪房產」**（`SITE_NAME`，定義在 `lib/constants.js`），法人名「株式会社和日」降為副標。
