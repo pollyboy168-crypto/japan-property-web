@@ -15,6 +15,20 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+// 出站連結掛上 UTM 參數，讓對方站台（以及我們自己的 GA4 出站點擊追蹤）
+// 認得出這個流量是從株式会社和日官網送過去的，方便日後談合作／衡量導流成效。
+function withReferralParams(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    url.searchParams.set('utm_source', 'japan.her-yow.com');
+    url.searchParams.set('utm_medium', 'referral');
+    url.searchParams.set('utm_campaign', 'kazuhi_news');
+    return url.toString();
+  } catch (e) {
+    return rawUrl;
+  }
+}
+
 export async function generateMetadata({ params }) {
   const item = await getNewsBySlug(params.slug);
 
@@ -48,6 +62,7 @@ export default async function NewsDetailPage({ params }) {
   }
 
   const url = `${SITE_URL}/news/${encodeURIComponent(item.slug)}`;
+  const isVideoItem = item.category === '影片' || item.source_name === 'YouTube';
 
   // 這裡刻意不整篇轉載來源新聞內容，只放我們自己寫的簡短引言＋連回原始
   // 來源，避免版權疑慮（見 lib/news.js／app/api/sync-news/route.js 的說明）。
@@ -108,12 +123,12 @@ export default async function NewsDetailPage({ params }) {
         </article>
 
         <a
-          href={item.source_url}
+          href={withReferralParams(item.source_url)}
           target="_blank"
           rel="noopener noreferrer"
           className="block text-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition"
         >
-          📰 閱讀原文（{item.source_name}）→
+          {isVideoItem ? '▶️ 觀看完整影片' : '📰 閱讀原文'}（{item.source_name}）→
         </a>
 
         <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-2xl p-6 sm:p-8 text-center space-y-4">

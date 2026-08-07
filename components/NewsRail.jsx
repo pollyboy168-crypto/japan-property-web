@@ -33,7 +33,11 @@ export default function NewsRail({ news }) {
           >
             <div className="flex items-center gap-2 text-[11px] text-slate-400">
               <span>{formatDate(item.published_at)}</span>
-              {item.category && <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium">{item.category}</span>}
+              {item.category && (
+                <span className={`px-1.5 py-0.5 rounded font-medium ${item.category === '影片' ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
+                  {item.category === '影片' ? '▶️ 影片' : item.category}
+                </span>
+              )}
             </div>
             <h3 className="font-bold text-sm text-slate-900 leading-snug line-clamp-2">{item.title}</h3>
             <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{item.summary_zh}</p>

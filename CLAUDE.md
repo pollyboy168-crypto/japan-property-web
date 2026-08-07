@@ -46,6 +46,10 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 
 **多瀏覽器選擇是工具本身的硬性規定，不是可以省略的一步**：使用者的帳號連了多個 Chrome 瀏覽器實例，呼叫 `tabs_context_mcp` 若回報「Multiple Chrome browsers are connected」，必須依照錯誤訊息指示，用 `AskUserQuestion` 列出每一個已連線瀏覽器（含 deviceId）加上「讓使用者自己在 Chrome 裡點 Connect 選」這個選項，等使用者選定後才能繼續，不要自己擅自選一個——這是單一工作階段（session）內第一次用到瀏覽器時才會遇到，選定後同一個 session 之後就可以直接開新分頁操作，不用重複問。
 
+**（2026-08-07 使用者指示）要選就選「本機這台電腦」的 Chrome**：如果出現多個已連線瀏覽器可選，一律優先選使用者目前正在用的這台本機電腦上的 Chrome，不要選到其他裝置上的實例。
+
+**Chrome 連線中斷是常見狀況，重試就好**：工具回報「Claude in Chrome is not connected」時，多半是 Chrome service worker 休眠之類的暫時性問題。先重試幾次；如果連續失敗，可以先去做其他不需要瀏覽器的工作（例如改程式碼、跑 build、commit），不要卡在原地空等，也不要因此就把需要瀏覽器的工作丟回去要使用者自己做。
+
 ## 需要 skill 時主動找、主動裝（2026-08-06 使用者指示）
 
 執行任務過程中，如果發現目前可用的 skill 都涵蓋不到當下需要的能力，**主動上網找適合的 skill 並加進來，不要就這樣硬做或跳過**。原則：
@@ -153,6 +157,15 @@ npm run deploy         # pages:build + wrangler pages deploy（僅供本機手�
 ### 行動裝置分頁：頁碼分頁 → 載入更多
 
 `components/PropertyGrid.jsx` 移除了原本的頁碼分頁（`currentPage`／`totalPages`／上下兩組頁碼按鈕），改成「載入更多物件」按鈕（`app/page.jsx` 用 `visibleCount` state，每次點擊 `+ITEMS_PER_BATCH`，`ITEMS_PER_BATCH = 12`）。原因是窄螢幕下頁碼分頁換頁後新內容在畫面外，使用者感覺不到「換頁了」；「載入更多」是購物網站商品牆常見模式，新卡片直接接在後面出現，捲動軌跡連續、不會有「消失重來」的錯覺。篩選條件（關鍵字／區域／價格）改變時會重置 `visibleCount` 回到初始值。
+
+### Phase 6.1（2026-08-07 稍晚）：UX 微調、新聞改台灣媒體、物件抓取輪替
+
+- **收藏入口統一**：`FavoritesCartWidget` 圖示從 🛒 改成 ❤️、配色從紅色改成金色系（使用者反映紅色太刺眼，金色也跟旗艦物業的高級調性一致）。`PropertyGrid` 的「只看收藏」切換鈕整個移除，收藏檢視只保留右下角浮動愛心這一個入口，避免同一功能兩個入口造成混淆。
+- **首頁區塊順序**：新聞區塊從物件牆「之前」移到「之後」（`RenovationCaseStudy` 後面），因為訪客進站主要目的是看房子，新聞是加值內容不該擋在前面。
+- **旗艦區塊配色**：`FlagshipShowcase` 背景從 `bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900` 改成純 `bg-slate-900`——原本的琥珀色漸層在部分區域讓白色文字對比度不足、難以閱讀。保留金色邊框與金色價格文字，維持高級感但不犧牲可讀性。
+- **新聞來源改台灣媒體**：`02_大阪熱門新聞每日蒐集` 的 Google News RSS 參數從 `hl=ja&gl=JP&ceid=JP:ja` 改成 `hl=zh-TW&gl=TW&ceid=TW:zh-Hant`，查詢關鍵字也全部改成繁體中文（大阪 房地產／民宿／旅遊／投資／關西萬博）。額外加一組 `大阪 房地產 site:youtube.com` 查詢抓影片內容。**影片偵測**：`<source url>` 含 `youtube.com` 或來源名稱是 `YouTube` 就標成 `category: '影片'`，前台列表與詳情頁對這類項目顯示 `▶️ 影片` 紅色標籤、按鈕文案改成「觀看完整影片」。**注意**：Google News RSS 的 `<link>` 是 Google 的轉址網址，不是 YouTube 原始網址，所以拿不到 video ID，無法做 iframe 內嵌播放，只能連出去；要真的內嵌播放得改接 YouTube Data API（需要 API key），目前先不做。
+- **出站連結加 UTM**：`/news/[slug]` 的「閱讀原文／觀看影片」按鈕會在來源網址上補 `utm_source=japan.her-yow.com&utm_medium=referral&utm_campaign=kazuhi_news`，讓對方站台的分析工具認得出流量來自本站（使用者要求的「讓 Google 識別得出是我們的網站」）。
+- **物件抓取改「每日輪替」而非一次抓完**：使用者希望物件數衝到 500 筆。實測發現**一次打太多請求一定會被健美家的 rate limit 擋掉**（35 個列表頁用 `Promise.all` 平行打 → 全部 429 → 回傳 0 筆）。改成 `CITY_GROUPS` 七組城市清單（涵蓋大阪市 1-10 頁、堺市、東大阪、豐中、吹田、枚方、高槻、八尾、茨木、寢屋川），用 `new Date().getDate() % 7` 每天輪一組，`MAX_LISTINGS = 40`、詳情頁 `BATCH = 5`，列表頁改成每次只平行抓 2 頁、批次之間 `sleep(700)`。**這代表 500 筆不是單次跑得到的，是靠每日排程慢慢累積**（upsert 用 `merge-duplicates`，同一物件重複抓不會變成多筆）。要更快只能降低節流強度，但那會直接觸發 429 反而一筆都拿不到——這是來源網站的硬限制，不是程式寫法問題。
 
 ### ⚠️ 待處理（Phase 6 範圍內尚未完成）
 

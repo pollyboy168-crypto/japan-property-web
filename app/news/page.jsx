@@ -57,7 +57,11 @@ export default async function NewsListPage() {
                 <div className="p-5 space-y-2 flex-1 flex flex-col">
                   <div className="flex items-center gap-2 text-xs text-slate-400">
                     <span>{formatDate(item.published_at)}</span>
-                    {item.category && <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-medium">{item.category}</span>}
+                    {item.category && (
+                      <span className={`px-2 py-0.5 rounded font-medium ${item.category === '影片' ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
+                        {item.category === '影片' ? '▶️ 影片' : item.category}
+                      </span>
+                    )}
                   </div>
                   <h2 className="font-bold text-base text-slate-900 leading-snug">{item.title}</h2>
                   <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed flex-1">{item.summary_zh}</p>
