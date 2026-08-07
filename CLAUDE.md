@@ -254,6 +254,16 @@ n8n workflow `02_大阪熱門新聞每日蒐集`（id `AOLHRFIe7fBhCOQj`）的 C
 delete from news_posts where summary_zh like '【日本新聞】%';
 ```
 
+## 🔒 `public/google9c0989f68118f6d0.html` 絕對不要刪
+
+這是 Google Search Console 的擁有權驗證檔（2026-08-07 加入），內容只有一行：
+
+```
+google-site-verification: google9c0989f68118f6d0.html
+```
+
+**驗證通過之後也必須永久保留**——Google 會定期重新檢查這個檔案，檔案不見了就會失去驗證狀態，Search Console 的資料與「要求建立索引」等功能會一起停掉。看起來像沒用的垃圾檔案，但不要「順手清掉」。
+
 ## ⚠️ slug / 網址路徑一律只能用 ASCII
 
 **Cloudflare Pages 的路由層會讓含非 ASCII 字元的路徑一律回 404。** 2026-08-07 實測：
