@@ -12,18 +12,26 @@
 // 寫入端 (/api/sync-properties) 早就做好了，這支腳本只要抓完 POST 過去。
 //
 // 用法：
-//   node scripts/scrape-kenbiya.mjs            # 跑一輪（預設 6 個地區）
-//   node scripts/scrape-kenbiya.mjs --all      # 跑完全部 54 個地區
+//   node scripts/scrape-kenbiya.mjs            # 掃全部 54 個地區，只抓新物件
+//   node scripts/scrape-kenbiya.mjs --quick    # 只掃前 6 個地區（測試用）
 //   node scripts/scrape-kenbiya.mjs --dry      # 只抓不寫入，看結果
 //
-// 需要環境變數 SYNC_SECRET（跟 Cloudflare 上設的那把一樣）。
+// SYNC_SECRET 由 lib-env.mjs 自動從 .env.local 讀，不需要先設環境變數。
 // ----------------------------------------------------------------
+
+import { loadEnv, requireEnv, stamp } from './lib-env.mjs';
+
+loadEnv();
 
 const API = 'https://japan.her-yow.com/api/sync-properties';
 const SUPA = 'https://nfegislkpuzqylwcfnoc.supabase.co';
 const SUPA_KEY = 'sb_publishable_ceNh3H1XvVzubJW7uKv3Rw_pujGphDu';
 const BASE = 'https://www.kenbiya.com';
-const TARGET = 1000;
+// 每次執行最多新增幾筆。原本是「總數達 1000 就整個跳過」，那是為了衝量階段
+// 設的；改成每日增量之後那個上限會讓新上架的物件永遠進不來，所以改成限制
+// 「單次新增量」——列表頁還是每天掃過一遍（很便宜），只有真正沒看過的物件
+// 才會去抓詳情頁，抓滿這個數就收工，避免一次跑太久或對健美家太兇。
+const MAX_NEW_PER_RUN = Number(process.env.MAX_NEW_PER_RUN || 150);
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -137,17 +145,30 @@ async function get(url) {
   return r.text();
 }
 
+// PostgREST 單次最多只回 1000 筆（Supabase 的 max-rows 設定），所以一定要分頁。
+// 不分頁的話，資料庫超過 1000 筆之後這份去重清單就是不完整的，已經抓過的物件
+// 會被當成新的重抓一遍——白費請求，也對健美家不必要地增加負擔。
 async function existingIds() {
-  const r = await fetch(SUPA + '/rest/v1/properties?select=id', {
-    headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY, Range: '0-1999' }
-  });
-  const arr = await r.json();
-  return new Set(Array.isArray(arr) ? arr.map((x) => x.id) : []);
+  const ids = new Set();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const r = await fetch(SUPA + '/rest/v1/properties?select=id&order=id', {
+      headers: {
+        apikey: SUPA_KEY,
+        Authorization: 'Bearer ' + SUPA_KEY,
+        Range: `${from}-${from + PAGE - 1}`
+      }
+    });
+    const arr = await r.json();
+    if (!Array.isArray(arr) || arr.length === 0) break;
+    for (const x of arr) ids.add(x.id);
+    if (arr.length < PAGE) break;
+  }
+  return ids;
 }
 
 async function push(records) {
-  const secret = process.env.SYNC_SECRET;
-  if (!secret) throw new Error('缺少環境變數 SYNC_SECRET');
+  const secret = requireEnv('SYNC_SECRET');
   const r = await fetch(API, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret },
@@ -158,18 +179,15 @@ async function push(records) {
   return body;
 }
 
-const argAll = process.argv.includes('--all');
 const argDry = process.argv.includes('--dry');
 
 const seen = await existingIds();
-console.log('資料庫現有物件：' + seen.size + ' 筆');
-if (seen.size >= TARGET) {
-  console.log('已達 ' + TARGET + ' 筆目標，不需要再抓。');
-  process.exit(0);
-}
+const startCount = seen.size;
+console.log('[' + stamp() + '] 資料庫現有物件：' + startCount + ' 筆');
 
-// 每輪從還沒抓滿的地區開始輪替；--all 就一次跑完全部
-const segs = argAll ? SEGMENTS : SEGMENTS.slice(0, 6);
+// 排程每天跑的目的就是把新上架的撈進來，所以預設掃全部地區；
+// 列表頁只有 54 個請求、已存在的物件不會去抓詳情頁，成本很低。
+const segs = process.argv.includes('--quick') ? SEGMENTS.slice(0, 6) : SEGMENTS;
 let scraped = 0;
 let blocked = 0;
 
@@ -217,8 +235,8 @@ for (const seg of segs) {
     (argDry ? '（dry-run，未寫入）' : '') + ' → 累計 ' + seen.size
   );
 
-  if (seen.size >= TARGET) {
-    console.log('已達 ' + TARGET + ' 筆目標，提前結束。');
+  if (scraped >= MAX_NEW_PER_RUN) {
+    console.log('本輪已新增 ' + scraped + ' 筆（上限 ' + MAX_NEW_PER_RUN + '），先收工，下次再繼續。');
     break;
   }
   await sleep(SEG_GAP);

@@ -45,7 +45,13 @@ async function upsertNews(records) {
     throw new Error('缺少 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY');
   }
 
-  const res = await fetch(`${url}/rest/v1/news_posts`, {
+  // ⚠️ 一定要指定 on_conflict=slug。
+  // news_posts 的主鍵是 id（uuid，每次都是新的），唯一鍵是 slug。PostgREST 的
+  // upsert 預設以「主鍵」為衝突目標，所以它會當成全新資料 INSERT，然後撞到
+  // slug 的 unique constraint 回 409 duplicate key。
+  // 這個 bug 潛伏很久沒被發現，因為早期每次抓到的都是新文章、slug 不重複；
+  // 直到每天定時重抓、同一篇文章第二次出現才爆出來。
+  const res = await fetch(`${url}/rest/v1/news_posts?on_conflict=slug`, {
     method: 'POST',
     headers: {
       apikey: anonKey,
