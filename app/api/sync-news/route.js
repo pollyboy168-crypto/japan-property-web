@@ -45,22 +45,45 @@ async function upsertNews(records) {
     throw new Error('缺少 NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY');
   }
 
-  // ⚠️ 一定要指定 on_conflict=slug。
-  // news_posts 的主鍵是 id（uuid，每次都是新的），唯一鍵是 slug。PostgREST 的
-  // upsert 預設以「主鍵」為衝突目標，所以它會當成全新資料 INSERT，然後撞到
-  // slug 的 unique constraint 回 409 duplicate key。
-  // 這個 bug 潛伏很久沒被發現，因為早期每次抓到的都是新文章、slug 不重複；
-  // 直到每天定時重抓、同一篇文章第二次出現才爆出來。
-  const res = await fetch(`${url}/rest/v1/news_posts?on_conflict=slug`, {
+  // ⚠️ 不要用 upsert（Prefer: resolution=merge-duplicates），改成「先查後插」。
+  //
+  // 踩過的兩層坑：
+  //  1. news_posts 的主鍵是 id（uuid，每次都新的）、唯一鍵是 slug。PostgREST 的
+  //     upsert 預設以主鍵為衝突目標，所以會當成全新資料 INSERT 再撞 slug 的
+  //     unique constraint → 409 duplicate key。
+  //  2. 加上 on_conflict=slug 之後變成 401 / 42501 權限不足——upsert 需要 UPDATE
+  //     權限，而 news_posts 的 RLS 只有 INSERT + SELECT，沒有 UPDATE policy。
+  //
+  // 與其為了 upsert 去放寬 anon 的寫入權限，不如先用（本來就允許的）SELECT
+  // 查出已存在的 slug，只 INSERT 沒看過的。新聞本來就是「發布後不會再改」的
+  // 資料，不需要更新語意，這樣做同時維持了最小權限。
+  const slugs = records.map((r) => r.slug);
+  const existing = new Set();
+  // in.(...) 的網址長度有限，分批查
+  for (let i = 0; i < slugs.length; i += 50) {
+    const chunk = slugs.slice(i, i + 50).map((s) => `"${s.replace(/"/g, '')}"`).join(',');
+    const q = await fetch(`${url}/rest/v1/news_posts?select=slug&slug=in.(${encodeURIComponent(chunk)})`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` }
+    });
+    if (q.ok) {
+      const rows = await q.json();
+      for (const row of rows) existing.add(row.slug);
+    }
+  }
+
+  const fresh = records.filter((r) => !existing.has(r.slug));
+  if (fresh.length === 0) return { inserted: 0, skipped: records.length };
+
+  const res = await fetch(`${url}/rest/v1/news_posts`, {
     method: 'POST',
     headers: {
       apikey: anonKey,
       Authorization: `Bearer ${anonKey}`,
       'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates'
+      Prefer: 'return=minimal'
     },
     body: JSON.stringify(
-      records.map((r) => ({
+      fresh.map((r) => ({
         slug: r.slug,
         title: r.title,
         summary_zh: r.summary_zh,
@@ -75,8 +98,10 @@ async function upsertNews(records) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Supabase upsert 失敗 (${res.status}): ${text}`);
+    throw new Error(`Supabase 寫入失敗 (${res.status}): ${text}`);
   }
+
+  return { inserted: fresh.length, skipped: records.length - fresh.length };
 }
 
 function isAuthorized(request) {
@@ -107,10 +132,17 @@ export async function POST(request) {
   const invalid = incoming.length - valid.length;
 
   try {
+    let result = { inserted: 0, skipped: 0 };
     if (valid.length > 0) {
-      await upsertNews(valid);
+      result = await upsertNews(valid);
     }
-    return json({ ok: true, received: incoming.length, upserted: valid.length, skipped: invalid });
+    return json({
+      ok: true,
+      received: incoming.length,
+      inserted: result.inserted,
+      duplicates: result.skipped,
+      invalid
+    });
   } catch (err) {
     console.error('❌ 新聞同步失敗:', err);
     return json({ error: String(err) }, 500);
